@@ -27,8 +27,8 @@ export function CreateBuildDiff(Original: BuildData, Compare: BuildData) {
   const originalStrings = JSON.parse(Original.Strings) as BuildStrings
   const compareStrings = JSON.parse(Compare.Strings) as BuildStrings
 
-  const originalExperiments = JSON.parse(Original.Experiments)
-  const compareExperiments = JSON.parse(Compare.Experiments)
+  const originalExperiments = Original.Experiments
+  const compareExperiments = Compare.Experiments
 
   // strings pass
   for (const [name, value] of Object.entries(compareStrings)) {
@@ -52,9 +52,14 @@ export function CreateBuildDiff(Original: BuildData, Compare: BuildData) {
 
   // experiments pass
   for (const [name, value] of Object.entries(originalExperiments)) {
+    // mongodb stuff; shouldnt be here at all !!
+    if (name.startsWith("$")) {
+      continue;
+    }
+
     const experiment = (value as Experiment)
     const experimentName = experiment?.title || experiment.name
-    const originalValue = originalExperiments[name] as Experiment
+    const originalValue = originalExperiments.get(name) as Experiment
 
     if (originalValue == undefined) {
       addedExperiments.push(`+ ${name}: ${experimentName}`)
@@ -62,9 +67,12 @@ export function CreateBuildDiff(Original: BuildData, Compare: BuildData) {
   }
 
   for (const [name, value] of Object.entries(compareExperiments)) {
+    if (name.startsWith("$")) {
+      continue;
+    }
     const experiment = (value as Experiment)
     const experimentName = experiment?.title || experiment.name
-    const compareValue = originalExperiments[name]
+    const compareValue = originalExperiments.get(name)
 
     if (compareValue == undefined) {
       removedExperiments.push(`- ${name}: ${experimentName}`)
