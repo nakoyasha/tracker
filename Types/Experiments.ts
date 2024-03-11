@@ -22,11 +22,11 @@ export type Experiment = {
   description: string[],
   title: string,
   type: "user" | "guild",
-  revision: number,
   assignment?: UserExperimentAssignment | GuildExperiment,
   // The requester's rollout position in the experiment.
-  rollout_position: number,
-  aa_mode: boolean,
+  revision?: number,
+  rollout_position?: number,
+  aa_mode?: boolean,
 }
 
 export type MinExperiment = {

@@ -1,15 +1,16 @@
 import { DiscordBranch } from "./DiscordBranch";
+import { Experiment } from "./Experiments";
 
 export type BuildData = {
   BuildNumber: string,
   VersionHash: string,
   Date: Number,
   Branch: DiscordBranch,
-  Strings: Map<string, string>,
+  Strings: string,
   // Strings: String,
-  Experiments: Map<string, string>,
+  Experiments: Map<string, Experiment>,
   Scripts: {
-    Initial: Map<string, string>,
-    Lazy: Map<string, string>
+    Initial: Array<string>,
+    Lazy: Array<string>
   }
 };
