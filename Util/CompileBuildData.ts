@@ -107,20 +107,23 @@ export async function compileBuildData(branch: DiscordBranch): Promise<BuildData
     pushGuildExperiment(experiment)
   }
 
-  const testStrings = new Map<string, string>()
-  testStrings.set("DISCORD", "DoohickeyCorp")
+  const initialScriptsArray = await mapIteratorToArray(initialScripts)
+  const lazyScriptsArray = await mapIteratorToArray(lazyScripts)
+
+  console.log(`InitialScriptsArray Length ${initialScriptsArray.length}`)
+  console.log(`LazyScriptsArray Length ${lazyScriptsArray.length}`)
 
   const buildData: BuildData = {
     Strings: JSON.stringify(Object.fromEntries(strings.entries())),
     Experiments: mappedExperiments,
     // make it human-comprehensible
-    Date: Math.floor(Date.now() / 1000),
+    Date: new Date(Date.now()),
     Branch: branch,
     BuildNumber: buildNumber as string,
     VersionHash: versionHash as string,
     Scripts: {
-      Initial: await mapIteratorToArray(initialScripts),
-      Lazy: await mapIteratorToArray(lazyScripts),
+      Initial: initialScriptsArray,
+      Lazy: lazyScriptsArray,
     },
   }
 

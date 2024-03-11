@@ -4,7 +4,7 @@ import { Experiment } from "./Experiments";
 export type BuildData = {
   BuildNumber: string,
   VersionHash: string,
-  Date: Number,
+  Date: Date,
   Branch: DiscordBranch,
   Strings: string,
   // Strings: String,
