@@ -5,6 +5,11 @@ export type BuildData = {
   VersionHash: string,
   Date: Number,
   Branch: DiscordBranch,
-  Strings: string,
-  Experiments: string,
+  Strings: Map<string, string>,
+  // Strings: String,
+  Experiments: Map<string, string>,
+  Scripts: {
+    Initial: Map<string, string>,
+    Lazy: Map<string, string>
+  }
 };

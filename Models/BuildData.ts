@@ -6,9 +6,25 @@ export const BuildSchema = new Schema<BuildData>({
   VersionHash: String,
   Date: Number,
   // TODO: propery store strings and experiments
-  Strings: String,
+  Strings: {
+    type: Map,
+    of: String,
+  },
+  Experiments: {
+    type: Map,
+    of: String,
+  },
   Branch: String,
-  Experiments: String,
+  Scripts: {
+    Initial: {
+      type: Map,
+      of: String,
+    },
+    Lazy: {
+      type: Map,
+      of: String,
+    }
+  }
 });
 
 export const BuildModel = model("Build", BuildSchema, "MizukiBuilds");
