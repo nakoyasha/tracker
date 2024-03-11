@@ -9,7 +9,9 @@ import { getURLForBranch } from "./Util/GetURLForBranch";
 
 const logger = new Logger("Util/PullClientScripts")
 
-export async function pullClientScripts(mode?: "initial" | "lazy" | "full", branch?: DiscordBranch) {
+export type FetchedStrings = Map<string, string>
+
+export async function pullClientScripts(mode?: "initial" | "lazy" | "full", branch?: DiscordBranch, fetchedInitialScripts?: FetchedStrings) {
   if (mode == undefined) {
     mode = "full"
   }
@@ -30,8 +32,7 @@ export async function pullClientScripts(mode?: "initial" | "lazy" | "full", bran
     const scriptElements = dom.getElementsByTagName("script")
 
     const initialScripts: string[] = []
-    const scripts: { [key: string]: string } = {}
-
+    const scripts = new Map<string, string>() as Map<string, string>
     for (let script of scriptElements) {
       const src = script.getAttribute("src")
 
@@ -41,7 +42,8 @@ export async function pullClientScripts(mode?: "initial" | "lazy" | "full", bran
       initialScripts.push(script.getAttribute("src") as string)
 
       if (mode == "full" || mode == "initial") {
-        scripts[src.replaceAll("/assets/", "")] = (await axios(URL + src)).data
+        // scripts[src.replaceAll("/assets/", "")] = (await axios(URL + src)).data
+        scripts.set(src.replaceAll("/assets/", ""), (await axios(URL + src)).data)
       }
     }
 
@@ -54,28 +56,34 @@ export async function pullClientScripts(mode?: "initial" | "lazy" | "full", bran
         const parsed = acorn.parse(file, { ecmaVersion: 10 })
 
         walk.ancestor(parsed, {
-          async Literal(node, _, ancestors) {
-            // TODO: this is janky. very janky. make it less janky :cr_hUh:
-            const value = node.value
-            const ancestor = ancestors[ancestors.length - 3]
+          async Property(node, _, ancestors) {
+            const lastAncestor = ancestors[ancestors.length]
 
-            if (typeof value === "string" && ancestor.type == "ObjectExpression") {
-              if (value.startsWith("lib/") || value.startsWith("istanbul") || value.startsWith("src")) {
-                return;
-              }
+            if (lastAncestor != undefined && lastAncestor.type != "ObjectExpression") {
+              return;
+            }
 
-              if ((value as string).endsWith(".js")) {
-                const content = (await axios(URL + "/assets/" + value)).data
-                scripts[value] = content
-              }
+            const key = node.key
+            const chunkID = ((key as any).value) as number
+            const isChunk = Number.isInteger(chunkID) == true
+            const chunk = (node.value as any).value as string
+            if (chunk == undefined || typeof chunk != "string") {
+              return
+            }
+            const isJSFile = chunk.endsWith(".js") == true
+
+            if (isChunk == true && isJSFile == true) {
+              const fileURL = URL + "/assets/" + chunk
+              const fileContent = (await axios(URL + "/assets/" + chunk)).data
+              scripts.set(chunk, fileContent)
             }
           }
         })
       }
     }
 
-    logger.log(`Got ${Object.values(scripts).length} total scripts`);
-    return Object.entries(scripts)
+    logger.log(`Got ${scripts.size} total scripts`);
+    return scripts
   } catch (err) {
     logger.error(`Failure while pulling scripts: ${err}`)
     throw err;
