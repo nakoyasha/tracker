@@ -22,4 +22,4 @@ export const BuildSchema = new Schema<BuildData>({
   }
 });
 
-export const BuildModel = model("Build", BuildSchema, "MizukiBuilds");
+export const BuildModel = model("Build", BuildSchema, "DiscordBuilds");
