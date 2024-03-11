@@ -233,10 +233,6 @@ export async function getExperiments(branch: DiscordBranch) {
       const experimentAssignment =
         experiments.guild.find((experiment) => experiment.hash == hash)
 
-      if (experimentAssignment == undefined) {
-        logger.warn(`Experiment ${experiment_name} has no server data!`)
-      }
-
       // // auto-correct. yayaya
       // if (experimentAssignment != undefined) {
       //   if (experiment.name != experimentAssignment.hash_key) {
