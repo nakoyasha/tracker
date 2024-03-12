@@ -110,14 +110,10 @@ export async function compileBuildData(branch: DiscordBranch): Promise<BuildData
   const initialScriptsArray = await mapIteratorToArray(initialScripts)
   const lazyScriptsArray = await mapIteratorToArray(lazyScripts)
 
-  console.log(`InitialScriptsArray Length ${initialScriptsArray.length}`)
-  console.log(`LazyScriptsArray Length ${lazyScriptsArray.length}`)
-
   const buildData: BuildData = {
     Strings: JSON.stringify(Object.fromEntries(strings.entries())),
     Experiments: mappedExperiments,
-    // make it human-comprehensible
-    Date: new Date(Date.now()),
+    Date: new Date(),
     Branch: branch,
     BuildNumber: buildNumber as string,
     VersionHash: versionHash as string,
