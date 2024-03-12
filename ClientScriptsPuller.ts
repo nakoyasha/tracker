@@ -56,26 +56,46 @@ export async function pullClientScripts(mode?: "initial" | "lazy" | "full", bran
         const parsed = acorn.parse(file, { ecmaVersion: 10 })
 
         walk.ancestor(parsed, {
-          async Property(node, _, ancestors) {
-            const lastAncestor = ancestors[ancestors.length]
 
-            if (lastAncestor != undefined && lastAncestor.type != "ObjectExpression") {
-              return;
-            }
+          // TODO: improve the Property walker; currently it uses 12 terabytes of memory :airidizzy:
 
-            const key = node.key
-            const chunkID = ((key as any).value) as number
-            const isChunk = Number.isInteger(chunkID) == true
-            const chunk = (node.value as any).value as string
-            if (chunk == undefined || typeof chunk != "string") {
-              return
-            }
-            const isJSFile = chunk.endsWith(".js") == true
+          // async Property(node, _, ancestors) {
+          //   const lastAncestor = ancestors[ancestors.length]
 
-            if (isChunk == true && isJSFile == true) {
-              const fileURL = URL + "/assets/" + chunk
-              const fileContent = (await axios(URL + "/assets/" + chunk)).data
-              scripts.set(chunk, fileContent)
+          //   if (lastAncestor != undefined && lastAncestor.type != "ObjectExpression") {
+          //     return;
+          //   }
+
+          //   const key = node.key
+          //   const chunkID = ((key as any).value) as number
+          //   const isChunk = Number.isInteger(chunkID) == true
+          //   const chunk = (node.value as any).value as string
+          //   if (chunk == undefined || typeof chunk != "string") {
+          //     return
+          //   }
+          //   const isJSFile = chunk.endsWith(".js") == true
+
+          //   if (isChunk == true && isJSFile == true) {
+          //     const fileURL = URL + "/assets/" + chunk
+          //     const fileContent = (await axios(URL + "/assets/" + chunk)).data
+          //     scripts.set(chunk, fileContent)
+          //   }
+          // }
+
+          async Literal(node, _, ancestors) {
+            // TODO: this is janky. very janky. make it less janky :cr_hUh:
+            const value = node.value
+            const ancestor = ancestors[ancestors.length - 3]
+
+            if (typeof value === "string" && ancestor.type == "ObjectExpression") {
+              if (value.startsWith("lib/") || value.startsWith("istanbul") || value.startsWith("src")) {
+                return;
+              }
+
+              if ((value as string).endsWith(".js")) {
+                const content = (await axios(URL + "/assets/" + value)).data
+                scripts.set(value, content)
+              }
             }
           }
         })
