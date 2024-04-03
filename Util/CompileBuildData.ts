@@ -6,7 +6,7 @@ import murmurhash from "murmurhash"
 import { BuildData } from "../Types/BuildData"
 import Logger from "../Logger"
 import { DiscordBranch } from "../Types/DiscordBranch"
-import { Experiment, GuildExperiment, MinExperiment } from "../Types/Experiments"
+import { Experiment, GuildExperiment } from "../Types/Experiments"
 import mapIteratorToArray from "./MapIteratorToArray"
 
 
