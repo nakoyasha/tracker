@@ -14,7 +14,6 @@ export type BuildDiff = {
   Experiments: DiffTable,
 }
 
-
 // Outputs a BuildDiff with markdown diff strings - should only really be used for displaying diffs.
 export function CreateBuildDiff(Original: BuildData, Compare: BuildData) {
   const addedStrings = []

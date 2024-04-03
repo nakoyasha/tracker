@@ -39,7 +39,6 @@ export type MinExperiment = {
   description: string[],
   title: string,
   type: "user" | "guild",
-  // The requester's rollout position in the experiment.
 }
 
 export type Experiments = {

@@ -1,4 +1,3 @@
-
 export default async function mapIteratorToArray(map: Map<any, any>) {
     const keys = map.keys()
     const array = []

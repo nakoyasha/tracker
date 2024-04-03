@@ -7,7 +7,6 @@ export type BuildData = {
   Date: Date,
   Branch: DiscordBranch,
   Strings: string,
-  // Strings: String,
   Experiments: Map<string, Experiment>,
   Scripts: {
     Initial: Array<string>,

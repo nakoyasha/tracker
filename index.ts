@@ -70,20 +70,6 @@ function processPopulationRanges(PopulationRanges: any[]) {
     ranges.push(processPopulationRange(range))
   })
 
-
-  // there are no ranges, so skip them entirely
-  // if (bucket == undefined || ranges == undefined) {
-  //   return {
-  //     bucket: null,
-  //     rollout: {
-  //       s: null,
-  //       e: null,
-  //     }
-  //   }
-  // }
-
-
-
   return [...ranges]
 }
 
@@ -134,8 +120,6 @@ function processPopulations(Populations: any[]) {
     populations.push(data as any)
   })
 
-  //console.log(populations)
-
   return populations
 }
 
@@ -179,20 +163,13 @@ function processUserAssignment(UserAssignment: any[]) {
   } as UserExperimentAssignment
 }
 
-
-
 export async function getExperiments(branch: DiscordBranch) {
   const URL = getURLForBranch(branch)
   try {
-    const experimentsResult = await axios.get(URL + "/api/v9/experiments?with_guild_experiments=true", {
-      // headers: {
-      //   "X-Fingerprint": fingerprint
-      // }
-    })
+    const experimentsResult = await axios.get(URL + "/api/v9/experiments?with_guild_experiments=true", {})
 
     const body = experimentsResult.data as ExperimentsHttpResult
     const resource_id = body.fingerprint
-
 
     const experiments = {
       assignments: [],
@@ -206,7 +183,6 @@ export async function getExperiments(branch: DiscordBranch) {
     })
 
     for (let guildExperiment of body.guild_experiments) {
-      // const earlyHash = (guildExperiment as any)[0]
       const experiment = processGuildExperiment(guildExperiment as any)
 
       if (experiment.hash_key != null) {
@@ -233,18 +209,10 @@ export async function getExperiments(branch: DiscordBranch) {
       const experimentAssignment =
         experiments.guild.find((experiment) => experiment.hash == hash)
 
-      // // auto-correct. yayaya
-      // if (experimentAssignment != undefined) {
-      //   if (experiment.name != experimentAssignment.hash_key) {
-
-      //   }
-      // }
-
       const rolloutPosition = murmurhash(`${experiment_name}:${resource_id}`) % 10000
 
       const properExperimentObject = {
         // alias because i cant be bothered to fix types :airicry:
-
         // either the server, or the client one
         hash_key: experimentAssignment?.hash_key || experiment.hash_key,
         name: experiment_name,
