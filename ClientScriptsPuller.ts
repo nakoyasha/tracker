@@ -63,8 +63,8 @@ export async function pullClientScripts(mode?: "initial" | "lazy" | "full", bran
   // ohwell :airicry:
   const branchURL = getURLForBranch(branch) as string
   const appUrl = new URL("/app", branchURL)
-  const initialScripts: string[] = []
-  const lazyScripts: string[] = []
+  let initialScripts: string[] = []
+  let lazyScripts: string[] = []
 
   const scripts = new Map<string, string>() as Map<string, string>
 
@@ -151,6 +151,10 @@ export async function pullClientScripts(mode?: "initial" | "lazy" | "full", bran
 
 
     logger.log(`Got ${scripts.size} total scripts, ${initialScripts.length} initial and ${lazyScripts.length} lazy`);
+
+    // clear out arrays
+    initialScripts = []
+    lazyScripts = []
     return scripts
   } catch (err) {
     logger.error(`Failure while pulling scripts: ${err}`)
