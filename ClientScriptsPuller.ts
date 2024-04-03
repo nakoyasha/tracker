@@ -1,12 +1,10 @@
 import Logger from "./Logger"
-import axios from "axios";
 import parse from "node-html-parser";
 
 import acorn, { Literal, Property } from "acorn"
 import walk from "acorn-walk"
 import { DiscordBranch } from "./Types/DiscordBranch";
 import { getURLForBranch } from "./Util/GetURLForBranch";
-import "node:fs/promises"
 
 const logger = new Logger("Util/PullClientScripts")
 
@@ -14,25 +12,42 @@ export type FetchedStrings = Map<string, string>
 
 async function fetchScriptFile(baseUrl: string, fileName: string) {
   const url = new URL(fileName, baseUrl)
-  const response = await fetch(url)
+  try {
+    const response = await fetch(url)
 
-  if (!response.ok) {
-    logger.error(`Failed to fetch script ${url}! Response code: ${response.status}`)
-    return;
-  } else {
-    return response.text()
+    if (!response.ok) {
+      logger.error(`Failed to fetch script ${url}! Response code: ${response.status}`)
+      return;
+    } else {
+
+      return response.text()
+    }
+  } catch (err) {
+    console.log(err)
+    logger.error(`Failed to fetch script ${url}! Error: ${err}`)
   }
 }
 
-async function fetchFilesAndPutThemInMap(baseUrl: string, files: string[], map: Map<string, string>) {
-  await Promise.all(files.map(async (file) => {
+async function fetchFilesAndPutThemInMap(baseUrl: string, files: string[], map: Map<string, string>, makeItFast?: boolean) {
+  async function fetchFile(file: string) {
     logger.log(`Fetching script: ${file}`)
 
     const script = await fetchScriptFile(baseUrl, "/assets/" + file)
     if (script != undefined) {
       map.set(file, script)
     }
-  }))
+  }
+
+  // seperating them because of ratelimits
+  if (makeItFast != undefined) {
+    await Promise.all(files.map(async (file) => {
+      await fetchFile(file)
+    }))
+  } else {
+    for (let file of files) {
+      await fetchFile(file)
+    }
+  }
 }
 
 export async function pullClientScripts(mode?: "initial" | "lazy" | "full", branch?: DiscordBranch, fetchedInitialScripts?: FetchedStrings) {
