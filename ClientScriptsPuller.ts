@@ -2,14 +2,38 @@ import Logger from "./Logger"
 import axios from "axios";
 import parse from "node-html-parser";
 
-import acorn from "acorn"
+import acorn, { Literal, Property } from "acorn"
 import walk from "acorn-walk"
 import { DiscordBranch } from "./Types/DiscordBranch";
 import { getURLForBranch } from "./Util/GetURLForBranch";
+import "node:fs/promises"
 
 const logger = new Logger("Util/PullClientScripts")
 
 export type FetchedStrings = Map<string, string>
+
+async function fetchScriptFile(baseUrl: string, fileName: string) {
+  const url = new URL(fileName, baseUrl)
+  const response = await fetch(url)
+
+  if (!response.ok) {
+    logger.error(`Failed to fetch script ${url}! Response code: ${response.status}`)
+    return;
+  } else {
+    return response.text()
+  }
+}
+
+async function fetchFilesAndPutThemInMap(baseUrl: string, files: string[], map: Map<string, string>) {
+  await Promise.all(files.map(async (file) => {
+    logger.log(`Fetching script: ${file}`)
+
+    const script = await fetchScriptFile(baseUrl, "/assets/" + file)
+    if (script != undefined) {
+      map.set(file, script)
+    }
+  }))
+}
 
 export async function pullClientScripts(mode?: "initial" | "lazy" | "full", branch?: DiscordBranch, fetchedInitialScripts?: FetchedStrings) {
   if (mode == undefined) {
@@ -22,87 +46,96 @@ export async function pullClientScripts(mode?: "initial" | "lazy" | "full", bran
 
   // very janky way to get the scripts.
   // ohwell :airicry:
-  const URL = getURLForBranch(branch)
+  const branchURL = getURLForBranch(branch) as string
+  const appUrl = new URL("/app", branchURL)
+  const initialScripts: string[] = []
+  const lazyScripts: string[] = []
+
+  const scripts = new Map<string, string>() as Map<string, string>
 
   logger.log("Getting initial scripts");
   try {
-    const initialDOM = await axios(URL + "/app")
-    const data = (initialDOM.data as string)
-    const dom = parse(data)
+    const appResponse = await fetch(appUrl)
+
+    if (!appResponse.ok) {
+      logger.error("Failed to fetch the initial dom? Response code: " + appResponse.status);
+      return;
+    }
+
+    const appHtml = await appResponse.text()
+    const dom = parse(appHtml)
+
     const scriptElements = dom.getElementsByTagName("script")
 
-    const initialScripts: string[] = []
-    const scripts = new Map<string, string>() as Map<string, string>
+    // fetch initial scripts
     for (let script of scriptElements) {
-      const src = script.getAttribute("src")
+      const filePath = script.getAttribute("src")
 
-      if (!src?.endsWith(".js")) {
+      if (!filePath?.endsWith(".js")) {
         continue;
       }
-      initialScripts.push(script.getAttribute("src") as string)
 
-      if (mode == "full" || mode == "initial") {
-        // scripts[src.replaceAll("/assets/", "")] = (await axios(URL + src)).data
-        scripts.set(src.replaceAll("/assets/", ""), (await axios(URL + src)).data)
-      }
+      const relativePath = filePath.replaceAll("/assets/", "")
+      initialScripts.push(relativePath as string)
     }
-
     logger.log(`Got ${initialScripts.length} initial scripts`);
 
-    if (mode == "full" || mode == "lazy") {
-      logger.log(`Getting every script from the lazy-loaded list. This may take a while!`)
-      for (let initialScript of initialScripts) {
-        const file = (await axios(URL + initialScript)).data
-        const parsed = acorn.parse(file, { ecmaVersion: 10 })
-
-        walk.ancestor(parsed, {
-
-          // TODO: improve the Property walker; currently it uses 12 terabytes of memory :airidizzy:
-
-          // async Property(node, _, ancestors) {
-          //   const lastAncestor = ancestors[ancestors.length]
-
-          //   if (lastAncestor != undefined && lastAncestor.type != "ObjectExpression") {
-          //     return;
-          //   }
-
-          //   const key = node.key
-          //   const chunkID = ((key as any).value) as number
-          //   const isChunk = Number.isInteger(chunkID) == true
-          //   const chunk = (node.value as any).value as string
-          //   if (chunk == undefined || typeof chunk != "string") {
-          //     return
-          //   }
-          //   const isJSFile = chunk.endsWith(".js") == true
-
-          //   if (isChunk == true && isJSFile == true) {
-          //     const fileURL = URL + "/assets/" + chunk
-          //     const fileContent = (await axios(URL + "/assets/" + chunk)).data
-          //     scripts.set(chunk, fileContent)
-          //   }
-          // }
-
-          async Literal(node, _, ancestors) {
-            // TODO: this is janky. very janky. make it less janky :cr_hUh:
-            const value = node.value
-            const ancestor = ancestors[ancestors.length - 3]
-
-            if (typeof value === "string" && ancestor.type == "ObjectExpression") {
-              if (value.startsWith("lib/") || value.startsWith("istanbul") || value.startsWith("src")) {
-                return;
-              }
-
-              if ((value as string).endsWith(".js")) {
-                const content = (await axios(URL + "/assets/" + value)).data
-                scripts.set(value, content)
-              }
-            }
-          }
-        })
-      }
+    if (mode == "full" || mode == "initial") {
+      await fetchFilesAndPutThemInMap(branchURL, initialScripts, scripts)
     }
 
-    logger.log(`Got ${scripts.size} total scripts`);
+    // fetch lazy scripts
+    if (mode == "full" || mode == "lazy") {
+      logger.log(`Getting every script from the lazy-loaded list. This may take a while!`)
+      const chunkLoader = initialScripts.find((script) => script.startsWith("web"))
+      if (chunkLoader == undefined) {
+        console.log(`Chunk loader is undefined ??`)
+        return;
+      }
+
+      const file = await fetchScriptFile(branchURL, "/assets/" + chunkLoader)
+
+      if (file == undefined) {
+        logger.error("Failed to fetch the chunk loader!");
+        return;
+      }
+      const ast = acorn.parse(file, { ecmaVersion: 10 })
+
+      walk.ancestor(ast, {
+        async Property(node, _, ancestors) {
+          const parent = ancestors[ancestors.length]
+
+          if (parent != undefined && parent.type != "ObjectExpression") {
+            return;
+          }
+          const property: Property = node as Property
+
+          const chunkID = (property.key as Literal).value
+          const isChunk = Number.isInteger(chunkID) == true
+          const chunk = (property.value as Literal).value
+
+          if (chunk == undefined || typeof chunk != "string") {
+            return
+          }
+
+          const isJSFile = true //chunk.endsWith(".js") == false
+
+          if (isChunk == true && isJSFile == true) {
+            let fileURL = chunk
+            if (fileURL.endsWith(".js") != true) {
+              fileURL = fileURL + ".js"
+            }
+
+            lazyScripts.push(fileURL)
+          }
+        },
+      })
+
+      await fetchFilesAndPutThemInMap(branchURL, lazyScripts, scripts)
+    }
+
+
+    logger.log(`Got ${scripts.size} total scripts, ${initialScripts.length} initial and ${lazyScripts.length} lazy`);
     return scripts
   } catch (err) {
     logger.error(`Failure while pulling scripts: ${err}`)

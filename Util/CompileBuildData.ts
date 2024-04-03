@@ -15,9 +15,20 @@ const logger = new Logger("Util/CompileBuildData");
 export async function compileBuildData(branch: DiscordBranch): Promise<BuildData | Error> {
   logger.log("Fetching initial scripts...")
   const initialScripts = await pullClientScripts("initial", branch)
-  console.log(initialScripts.size)
+
+  if (initialScripts == undefined) {
+    logger.error("Failed to fetch initial scripts!")
+    return new Error("Failed to fetch initial scripts!")
+  }
+
   logger.log("Fetching lazy-loaded scripts...")
-  const lazyScripts = await pullClientScripts("lazy", branch, initialScripts)
+  const lazyScripts = await pullClientScripts("lazy", branch)
+
+  if (lazyScripts == undefined) {
+    logger.error("Failed to fetch lazy scripts!")
+    return new Error("Failed to fetch lazy scripts!")
+  }
+
   logger.log("Fetching experiments...")
   const experiments = await getExperiments(branch)
   const strings = new Map<string, string>() as Map<string, string>

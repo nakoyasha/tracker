@@ -43,6 +43,11 @@ export class ASTPuller implements ExperimentPuller {
     try {
       const scripts = await pullClientScripts("lazy", branch)
 
+      if (scripts == undefined) {
+        logger.error("Failed to pull client scripts!")
+        return;
+      }
+
       for (const [path, script] of scripts) {
         const ast = acorn.parse(script, { ecmaVersion: 10 })
 
