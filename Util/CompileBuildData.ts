@@ -1,5 +1,15 @@
-import { pullClientScripts } from "../ClientScriptsPuller"
-import acorn, { Identifier, Literal, Property } from "acorn"
+import {
+  fetchInitialScripts,
+  fetchLazyLoadedScripts,
+  getChunkLoader,
+  fetchFilesAndPutThemInMap
+} from "../ClientScriptsPuller"
+import acorn,
+{
+  Identifier,
+  Literal,
+  Property
+} from "acorn"
 import walk from "acorn-walk"
 import { getExperiments } from ".."
 import murmurhash from "murmurhash"
@@ -12,22 +22,30 @@ import mapIteratorToArray from "./MapIteratorToArray"
 
 const logger = new Logger("Util/CompileBuildData");
 
-export async function compileBuildData(branch: DiscordBranch): Promise<BuildData | Error> {
+export async function compileBuildData(branch: DiscordBranch = DiscordBranch.Stable): Promise<BuildData | Error> {
   logger.log("Fetching initial scripts...")
-  const initialScripts = await pullClientScripts("initial", branch)
+  const initialScriptsUrls = await fetchInitialScripts(branch);
+  const chunkLoader = await getChunkLoader(branch, initialScriptsUrls);
 
-  if (initialScripts == undefined) {
+  if (initialScriptsUrls == undefined) {
     logger.error("Failed to fetch initial scripts!")
     return new Error("Failed to fetch initial scripts!")
   }
 
   logger.log("Fetching lazy-loaded scripts...")
-  const lazyScripts = await pullClientScripts("lazy", branch)
+  const lazyScriptsUrls = await fetchLazyLoadedScripts(chunkLoader);
 
-  if (lazyScripts == undefined) {
+  if (lazyScriptsUrls == undefined) {
     logger.error("Failed to fetch lazy scripts!")
     return new Error("Failed to fetch lazy scripts!")
   }
+
+  let initialScripts = new Map<string, string>()
+  let lazyScripts = new Map<string, string>()
+
+  await fetchFilesAndPutThemInMap(branch, initialScriptsUrls, initialScripts, true)
+  await fetchFilesAndPutThemInMap(branch, lazyScriptsUrls, lazyScripts, true)
+
 
   logger.log("Fetching experiments...")
   const experiments = await getExperiments(branch)
@@ -118,9 +136,6 @@ export async function compileBuildData(branch: DiscordBranch): Promise<BuildData
     pushGuildExperiment(experiment)
   }
 
-  const initialScriptsArray = await mapIteratorToArray(initialScripts)
-  const lazyScriptsArray = await mapIteratorToArray(lazyScripts)
-
   const buildData: BuildData = {
     Strings: JSON.stringify(Object.fromEntries(strings.entries())),
     Experiments: mappedExperiments,
@@ -129,8 +144,8 @@ export async function compileBuildData(branch: DiscordBranch): Promise<BuildData
     BuildNumber: buildNumber as string,
     VersionHash: versionHash as string,
     Scripts: {
-      Initial: initialScriptsArray,
-      Lazy: lazyScriptsArray,
+      Initial: initialScriptsUrls,
+      Lazy: lazyScriptsUrls,
     },
   }
 

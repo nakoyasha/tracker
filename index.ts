@@ -164,9 +164,8 @@ function processUserAssignment(UserAssignment: any[]) {
 }
 
 export async function getExperiments(branch: DiscordBranch) {
-  const URL = getURLForBranch(branch)
   try {
-    const experimentsResult = await axios.get(URL + "/api/v9/experiments?with_guild_experiments=true", {})
+    const experimentsResult = await axios.get(branch + "/api/v9/experiments?with_guild_experiments=true", {})
 
     const body = experimentsResult.data as ExperimentsHttpResult
     const resource_id = body.fingerprint
@@ -193,10 +192,7 @@ export async function getExperiments(branch: DiscordBranch) {
     }
 
     // pull client experiments last, as its unreliable/slow and :yesyesyes:
-
-    // ts devs smoke weed before working on it i swear
-    // @ts-ignore
-    const clientExperiments = await getClientExperiments("ast", "stable")
+    const clientExperiments = await getClientExperiments("ast", DiscordBranch.Stable)
 
     // @ts-ignore
     Object.entries(clientExperiments).forEach(([experiment_name, experiment]) => {
@@ -240,7 +236,7 @@ export async function getExperiments(branch: DiscordBranch) {
 // Performs a (proper) pull on client experiments, which results in hash_key, and the proper name being available.
 // ast - fast
 // puppeter - slow
-export function getClientExperiments(type: "puppeteer" | "ast", branch: DiscordBranch) {
+export function getClientExperiments(type: "puppeteer" | "ast", branch: DiscordBranch = DiscordBranch.Stable) {
   switch (type) {
     case "puppeteer":
       return new PuppeteerPull().getClientExperiments(branch)

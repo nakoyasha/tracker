@@ -1,8 +1,9 @@
 import { pullClientScripts } from "../ClientScriptsPuller"
 import { ExperimentPuller } from "../ExperimentPuller";
 
-import acorn, { ArrayExpression, ObjectExpression, Property } from "acorn"
-import walk from "acorn-walk"
+import { parseSync } from "oxc-parser";
+import { walk } from "estree-walker"
+
 import { DiscordBranch } from "../Types/DiscordBranch"
 import Logger from "../Logger"
 import { Experiment } from "../Types/Experiments";
@@ -14,13 +15,13 @@ export type Treatment = {
   label: string,
 }
 
-export function parseTreatments(Array: ArrayExpression) {
-  const treatments = Array.elements as ObjectExpression[]
+export function parseTreatments(Array: any) {
+  const treatments = Array.elements
   const parsedTreatments = [] as Treatment[]
 
-  treatments.forEach(treatment => {
-    const id = treatment.properties.find((prop) => (prop as any)?.key?.name == "id") as Property
-    const label = treatment.properties.find((prop) => (prop as any)?.key?.name == "label") as Property
+  treatments.forEach((treatment: any) => {
+    const id = treatment.properties.find((prop: any) => (prop as any)?.key?.name == "id")
+    const label = treatment.properties.find((prop: any) => (prop as any)?.key?.name == "label")
 
     const idValue = id?.value as any
     const labelValue = label?.value as any
@@ -48,17 +49,19 @@ export class ASTPuller implements ExperimentPuller {
         return;
       }
 
-      for (const [path, script] of scripts) {
-        const ast = acorn.parse(script, { ecmaVersion: 10 })
+      for (const [script] of scripts) {
+        const ast = parseSync(script)
 
-        walk.simple(ast, {
-          ObjectExpression(node) {
+        walk(JSON.parse(ast.program), {
+          enter: (node) => {
+            if (node.type != "ObjectExpression") { return; }
+
             const properties = node.properties
-            const kind = properties.find(prop => (prop as any)?.key?.name == "kind")
-            const id = properties.find(prop => (prop as any)?.key?.name == "id")
-            const label = properties.find(prop => (prop as any)?.key?.name == "label")
-            const defaultConfig = properties.find(prop => (prop as any)?.key?.name == "defaultConfig")
-            const treatments = properties.find(prop => (prop as any)?.key?.name == "treatments")
+            const kind = properties.find((prop: any) => prop?.key?.name == "kind")
+            const id = properties.find((prop: any) => prop?.key?.name == "id")
+            const label = properties.find((prop: any) => prop?.key?.name == "label")
+            const defaultConfig = properties.find((prop: any) => prop?.key?.name == "defaultConfig")
+            const treatments = properties.find((prop: any) => prop?.key?.name == "treatments")
 
             const isExperiment = kind != undefined &&
               id != undefined &&
@@ -92,6 +95,7 @@ export class ASTPuller implements ExperimentPuller {
         })
       }
     } catch (err) {
+      console.log(err)
       logger.error(`ASTPuller failure: ${err}`)
     }
 
