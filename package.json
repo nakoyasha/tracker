@@ -1,0 +1,19 @@
+{
+  "name": "@mizuki-bot/tracker",
+  "version": "0.0.1",
+  "homepage": "https://github.com/nakoyasha/tracker",
+  "types": "index.ts",
+  "main": "index.ts",
+  "dependencies": {
+    "acorn": "^8.11.3",
+    "acorn-walk": "^8.3.2",
+    "estree-walker": "2.0.2",
+    "mongoose": "^7.6.7",
+    "murmurhash": "^2.0.1",
+    "oxc-parser": "^0.8.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.6",
+    "typescript": "^5.3.3"
+  }
+}

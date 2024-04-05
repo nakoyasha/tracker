@@ -1,14 +1,24 @@
 import Logger from "./Logger"
 import parse from "node-html-parser";
+import {
+  JS_URL_REGEXES,
+} from "./constants";
 
-import acorn, { Literal, Property } from "acorn"
-import walk from "acorn-walk"
+import * as walker from "estree-walker";
+import { parseSync } from "oxc-parser"
+
 import { DiscordBranch } from "./Types/DiscordBranch";
 import { getURLForBranch } from "./Util/GetURLForBranch";
+
+import { fetch, setGlobalDispatcher, Agent } from 'undici'
+
+// otherwise fetch dies while fetching too many files
+setGlobalDispatcher(new Agent({ connect: { timeout: 60_000 } }))
 
 const logger = new Logger("Util/PullClientScripts")
 
 export type FetchedStrings = Map<string, string>
+const IGNORED_FILENAMES = ["NW.js", "Node.js", "bn.js", "hash.js", "utf8str", "t61str", "ia5str", "iso646str"];
 
 async function fetchScriptFile(baseUrl: string, fileName: string) {
   const url = new URL(fileName, baseUrl)
@@ -114,39 +124,83 @@ export async function pullClientScripts(mode?: "initial" | "lazy" | "full", bran
         logger.error("Failed to fetch the chunk loader!");
         return;
       }
-      const ast = acorn.parse(file, { ecmaVersion: 10 })
 
-      walk.ancestor(ast, {
-        async Property(node, _, ancestors) {
-          const parent = ancestors[ancestors.length]
+      const ast = parseSync(file);
 
-          if (parent != undefined && parent.type != "ObjectExpression") {
-            return;
+      walker.walk(JSON.parse(ast.program), {
+        enter: (node: any, parent: any) => {
+          if (parent === null) { return; }
+          let isChunk = false
+          let chunkID: number | undefined = undefined;
+          let chunkHash: string | undefined = undefined;
+
+          if (node.type === "ConditionalExpression") {
+            const test = node.test
+            const consequent = node.consequent
+
+            if (test === undefined) { return; }
+            if (consequent === undefined) { return; }
+            if (test.type !== "BinaryExpression" || consequent.type !== "BinaryExpression") { return; }
+            const testLeft = test.left
+            const consequentRight = consequent.right
+            if (consequentRight.type !== "StringLiteral") { return; }
+
+            const _chunkID: string = testLeft.value
+            const _chunkHash: string = consequentRight.value
+
+            const isChunkHash = _chunkHash.endsWith(".js") === true
+
+            if (isChunkHash === true) {
+              chunkID = Number.parseInt(_chunkID)
+              chunkHash = `${_chunkID}${_chunkHash}`
+              isChunk = true
+            } else {
+              console.log(_chunkID, _chunkHash)
+            }
           }
-          const property: Property = node as Property
 
-          const chunkID = (property.key as Literal).value
-          const isChunk = Number.isInteger(chunkID) == true
-          const chunk = (property.value as Literal).value
+          if (parent.type === "ObjectExpression") {
+            const key = node.key
+            const value = node.value
 
-          if (chunk == undefined || typeof chunk != "string") {
-            return
-          }
+            if (key === undefined) { return; }
+            if (value === undefined) { return; }
 
-          const isJSFile = true //chunk.endsWith(".js") == false
+            const _chunkID = key.value
+            const isChunkIDNum = Number.isInteger(_chunkID) === true
+            const _chunkHash: string = value.value
 
-          if (isChunk == true && isJSFile == true) {
-            let fileURL = chunk
-            if (fileURL.endsWith(".js") != true) {
-              fileURL = fileURL + ".js"
+            if (typeof (_chunkHash) !== "string") {
+              return;
             }
 
-            lazyScripts.push(fileURL)
+            const isHash = IGNORED_FILENAMES.includes(_chunkHash) !== true
+              && _chunkHash.startsWith("F") !== true
+              && _chunkHash.endsWith(".js") !== true
+              && JS_URL_REGEXES.regex_url_hash.test(_chunkHash)
+
+            const isChunkFile = _chunkHash !== undefined
+              && isChunkIDNum === true
+              && isHash === true
+
+            if (isChunkFile === true) {
+              chunkID = Number.parseInt(_chunkID)
+              chunkHash = _chunkHash
+              isChunk = true
+            }
+          }
+
+          if (isChunk === true && chunkID !== undefined && chunkHash !== undefined) {
+            console.log(`ChunkID: ${chunkID}, Hash: ${chunkHash}`)
+            if (!chunkHash.endsWith(".js")) {
+              chunkHash = `${chunkHash}.js`
+            }
+            lazyScripts.push(chunkHash)
           }
         },
       })
 
-      await fetchFilesAndPutThemInMap(branchURL, lazyScripts, scripts)
+      await fetchFilesAndPutThemInMap(branchURL, lazyScripts, scripts, true)
     }
 
 
