@@ -7,32 +7,33 @@ import { walk } from "estree-walker"
 import { DiscordBranch } from "../Types/DiscordBranch"
 import Logger from "../Logger"
 import { Experiment } from "../Types/Experiments";
+import { astToJSValue, isExperiment } from "../Util/AST/ASTToJSValue";
 
 const logger = new Logger("Util/PullExperimentData/ASTPuller")
 
-export type Treatment = {
-  id: number,
-  label: string,
-}
-
 export function parseTreatments(Array: any) {
+  if (Array.type !== "ArrayExpression") {
+    logger.warn(`Encountered an unknown type while parsing treatments: ${Array.type}`)
+    return []
+  }
+
   const treatments = Array.elements
   const parsedTreatments = [] as Treatment[]
 
   treatments.forEach((treatment: any) => {
-    const id = treatment.properties.find((prop: any) => (prop as any)?.key?.name == "id")
-    const label = treatment.properties.find((prop: any) => (prop as any)?.key?.name == "label")
-
-    const idValue = id?.value as any
-    const labelValue = label?.value as any
-
-    parsedTreatments.push({
-      id: (idValue?.value as number),
-      label: (labelValue?.value as string),
-    })
+    const _treatment: Treatment = astToJSValue(treatment)
+    parsedTreatments.push(_treatment)
   })
 
   return parsedTreatments
+}
+
+export type Treatment = {
+  id: number,
+  label: string,
+  config: {
+    enabled: boolean
+  }
 }
 
 export class ASTPuller implements ExperimentPuller {
@@ -42,39 +43,31 @@ export class ASTPuller implements ExperimentPuller {
     const experiments = {} as { [key: string]: any }
 
     try {
-      const scripts = await pullClientScripts("lazy", branch)
+      const scripts = await pullClientScripts("full", branch)
 
       if (scripts == undefined) {
         logger.error("Failed to pull client scripts!")
         return;
       }
 
-      for (const [script] of scripts) {
+      for (const [path, script] of scripts) {
         const ast = parseSync(script)
 
         walk(JSON.parse(ast.program), {
           enter: (node) => {
-            if (node.type != "ObjectExpression") { return; }
+            if (node.type !== "ObjectExpression") { return; }
 
             const properties = node.properties
             const kind = properties.find((prop: any) => prop?.key?.name == "kind")
             const id = properties.find((prop: any) => prop?.key?.name == "id")
             const label = properties.find((prop: any) => prop?.key?.name == "label")
-            const defaultConfig = properties.find((prop: any) => prop?.key?.name == "defaultConfig")
             const treatments = properties.find((prop: any) => prop?.key?.name == "treatments")
-
-            const isExperiment = kind != undefined &&
-              id != undefined &&
-              label != undefined &&
-              defaultConfig != undefined &&
-              treatments != undefined
 
             const kindValue = (kind as any)?.value?.value
             const labelValue = (label as any)?.value?.value
             const idValue = (id as any)?.value?.value
 
-
-            if (isExperiment == true) {
+            if (isExperiment(node)) {
               const parsedTreatments = parseTreatments((treatments as any)?.value)
               experiments[idValue] = {
                 type: kindValue,
@@ -83,12 +76,6 @@ export class ASTPuller implements ExperimentPuller {
                 name: labelValue,
                 description: parsedTreatments.map((a) => a.label),
                 buckets: parsedTreatments.map((a) => a.id),
-
-                // all of these are placeholder since PullExperimentData sets them anyway; 
-                hash: 0xff,
-                revision: 0xff,
-                rollout_position: 0xff,
-                aa_mode: false,
               }
             }
           }
