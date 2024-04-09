@@ -34,10 +34,10 @@ export function CreateBuildDiff(Original: BuildData, Compare: BuildData) {
     const originalValue = originalStrings[name]
 
     if (originalValue == undefined) {
-      addedStrings.push(`+ ${name}: "${value}"`)
+      addedStrings.push(`+ ${name}: ${value}`)
     } else if (originalValue != value) {
-      changedStrings.push(`- ${name}: "${originalValue}"`)
-      changedStrings.push(`+ ${name}: "${value}"`)
+      changedStrings.push(`- ${name}: ${originalValue}`)
+      changedStrings.push(`+ ${name}: ${value}`)
     }
   }
 
