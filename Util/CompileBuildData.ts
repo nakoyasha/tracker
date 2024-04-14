@@ -10,7 +10,8 @@ import acorn,
   Literal,
   Property
 } from "acorn"
-import walk from "acorn-walk"
+import { parseSync } from "oxc-parser"
+import { walk } from "estree-walker"
 import { getExperiments } from ".."
 import murmurhash from "murmurhash"
 import { BuildData } from "../Types/BuildData"
@@ -54,35 +55,43 @@ export async function compileBuildData(branch: DiscordBranch = DiscordBranch.Sta
   let languageObjectFile = undefined as string | undefined
 
   for (let [path, script] of initialScripts) {
-    const ast = acorn.parse(script, { ecmaVersion: 10 })
+    try {
+      const ast = parseSync(script)
 
-    walk.simple(ast, {
-      ObjectExpression(node) {
-        const properties = node.properties
-        const fileBuildNumber = properties.find(prop => (prop as any)?.key?.name == "buildNumber") as Property
-        const fileVersionHash = properties.find(prop => (prop as any)?.key?.name == "versionHash") as Property
 
-        const isBuildObject = fileBuildNumber != undefined && fileVersionHash != undefined
-        const isLanguageObject = properties.find(prop => (prop as any)?.key?.name == "DISCORD") != undefined
+      walk(JSON.parse(ast.program), {
+        enter(node: any, parent, key, index) {
+          if (node.type !== "ObjectExpression") { return }
 
-        if (isLanguageObject == true) {
-          logger.log(`Found the language object!: ${path}`)
-          languageObjectFile = path
-          properties.forEach((node) => {
-            const prop = node as Property
-            const key = prop.key as Identifier
-            const value = prop.value as Literal
+          const properties: any[] = node.properties
+          const fileBuildNumber = properties.find(prop => (prop as any)?.key?.name == "buildNumber")
+          const fileVersionHash = properties.find(prop => (prop as any)?.key?.name == "versionHash")
 
-            const keyName = key.name as string
-            strings.set(keyName, '"' + value.value + '"' as string)
-          })
-        } else if (isBuildObject == true) {
-          buildNumber = (fileBuildNumber.value as Literal)?.value as number
-          versionHash = (fileVersionHash.value as Literal)?.value as string
-          logger.log(`Found the buildNumber and versionHash: ${buildNumber}, ${versionHash}`)
-        }
-      }
-    })
+          const isBuildObject = fileBuildNumber != undefined && fileVersionHash != undefined
+          const isLanguageObject = properties.find(prop => (prop as any)?.key?.name == "DISCORD") != undefined
+
+          if (isLanguageObject == true) {
+            logger.log(`Found the language object!: ${path}`)
+            languageObjectFile = path
+            properties.forEach((node) => {
+              const prop = node as Property
+              const key = prop.key as Identifier
+              const value = prop.value as Literal
+
+              const keyName = key.name as string
+              strings.set(keyName, '"' + value.value + '"' as string)
+            })
+          } else if (isBuildObject == true) {
+            buildNumber = (fileBuildNumber.value as Literal)?.value as number
+            versionHash = (fileVersionHash.value as Literal)?.value as string
+            logger.log(`Found the buildNumber and versionHash: ${buildNumber}, ${versionHash}`)
+          }
+        },
+      })
+    } catch (err) {
+      logger.error(`Error while parsing ${path}: ${err}`)
+
+    }
   }
 
   if (buildNumber == undefined || versionHash == undefined) {
