@@ -1,21 +1,67 @@
-import { BuildData } from "../Types/BuildData";
+import { LegacyBuildData } from "../Types/BuildData";
+import { Diff, DiffType } from "../Types/Diff";
 import { Experiment } from "../Types/Experiments";
 
 type BuildStrings = { [key: string]: string }
 
-export type DiffTable = {
-  Added: String,
+export type LegacyDiffTable = {
+  Added: Diff,
   Removed: String,
   Changed: String,
 }
 
+export type DiffTable = Diff[]
 export type BuildDiff = {
-  Strings: DiffTable,
-  Experiments: DiffTable,
+  Strings: LegacyDiffTable,
+  Experiments: LegacyDiffTable,
+}
+
+export function createBuildDiffByStrings(New: BuildStrings, Old: BuildStrings) {
+  const addedStrings: DiffTable = []
+  const changedStrings: DiffTable = []
+  const removedStrings: DiffTable = []
+
+  for (const [name, value] of Object.entries(Old)) {
+    const originalValue = New[name]
+
+    if (originalValue == undefined) {
+      addedStrings.push({
+        type: DiffType.Added,
+        key: name,
+        value: value
+      })
+    } else if (originalValue != value) {
+      changedStrings.push({
+        type: DiffType.Changed,
+        key: name,
+        value: value,
+        newValue: value,
+        oldValue: originalValue
+      })
+    }
+  }
+
+  for (const [name, value] of Object.entries(Old)) {
+    const compareValue = New[name]
+
+    if (compareValue == undefined) {
+      removedStrings.push({
+        type: DiffType.Removed,
+        key: name,
+        value: value
+      })
+    }
+  }
+
+  return {
+    added: addedStrings,
+    removed: removedStrings,
+    changedStrings: changedStrings,
+  }
 }
 
 // Outputs a BuildDiff with markdown diff strings - should only really be used for displaying diffs.
-export function CreateBuildDiff(Original: BuildData, Compare: BuildData) {
+export function CreateBuildDiff(Original: LegacyBuildData, Compare: LegacyBuildData) {
   const addedStrings = []
   const changedStrings = []
   const removedStrings = []

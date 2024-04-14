@@ -17,8 +17,6 @@ import { BuildData } from "../Types/BuildData"
 import Logger from "../Logger"
 import { DiscordBranch } from "../Types/DiscordBranch"
 import { Experiment, GuildExperiment } from "../Types/Experiments"
-import mapIteratorToArray from "./MapIteratorToArray"
-
 
 const logger = new Logger("Util/CompileBuildData");
 
@@ -51,7 +49,7 @@ export async function compileBuildData(branch: DiscordBranch = DiscordBranch.Sta
   const experiments = await getExperiments(branch)
   const strings = new Map<string, string>() as Map<string, string>
 
-  let buildNumber = undefined as string | undefined
+  let buildNumber = undefined as number | undefined
   let versionHash = undefined as string | undefined
   let languageObjectFile = undefined as string | undefined
 
@@ -68,8 +66,7 @@ export async function compileBuildData(branch: DiscordBranch = DiscordBranch.Sta
         const isLanguageObject = properties.find(prop => (prop as any)?.key?.name == "DISCORD") != undefined
 
         if (isLanguageObject == true) {
-          logger.log("Found the en-us language array!")
-          console.log(path)
+          logger.log(`Found the language object!: ${path}`)
           languageObjectFile = path
           properties.forEach((node) => {
             const prop = node as Property
@@ -80,7 +77,7 @@ export async function compileBuildData(branch: DiscordBranch = DiscordBranch.Sta
             strings.set(keyName, '"' + value.value + '"' as string)
           })
         } else if (isBuildObject == true) {
-          buildNumber = (fileBuildNumber.value as Literal)?.value as string
+          buildNumber = (fileBuildNumber.value as Literal)?.value as number
           versionHash = (fileVersionHash.value as Literal)?.value as string
           logger.log(`Found the buildNumber and versionHash: ${buildNumber}, ${versionHash}`)
         }
@@ -137,18 +134,20 @@ export async function compileBuildData(branch: DiscordBranch = DiscordBranch.Sta
   }
 
   const buildData: BuildData = {
-    Strings: JSON.stringify(Object.fromEntries(strings.entries())),
-    Experiments: mappedExperiments,
-    Date: new Date(),
-    Branch: branch,
-    BuildNumber: buildNumber as string,
-    VersionHash: versionHash as string,
-    Scripts: {
-      Initial: initialScriptsUrls,
-      Lazy: lazyScriptsUrls,
+    // Strings: JSON.stringify(Object.fromEntries(strings.entries())),
+    strings_diff: [],
+    experiments: mappedExperiments,
+    date_found: new Date(Date.now()),
+    branches: [branch],
+    flags: [],
+    build_number: buildNumber,
+    build_hash: versionHash as string,
+    scripts: {
+      initial: initialScriptsUrls,
+      lazy: lazyScriptsUrls,
     },
   }
 
-  logger.log(`Build ${buildData.BuildNumber} has been compiled!`)
+  logger.log(`Build ${buildData.build_number} has been compiled!`)
   return buildData
 }
