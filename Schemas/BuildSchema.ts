@@ -25,6 +25,7 @@ export const BuildSchema = new Schema<BuildData>({
   build_number: Number,
   build_hash: String,
   date_found: Date,
+  built_on: Date,
   experiments: {
     type: Map<string, Experiment>,
     required: true,
@@ -48,9 +49,13 @@ export const BuildSchema = new Schema<BuildData>({
   ],
   flags: [{
     type: String,
-    enum: ["needs-string-rediff", "needs-experiment-fetch", "needs-script-fetch"],
+    enum: ["needs-string-rediff", "needs-experiment-fetch", "needs-script-fetch", "needs-recounting"],
     required: false,
   }],
+  counts: {
+    strings: Number,
+    experiments: Number,
+  },
   branches: [String],
   diff_against: {
     type: String,
