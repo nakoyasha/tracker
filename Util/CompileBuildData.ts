@@ -1,20 +1,13 @@
 import {
-  fetchInitialScripts,
-  fetchLazyLoadedScripts,
-  getChunkLoader,
-  fetchFilesAndPutThemInMap
+  ClientScript,
+  ScriptFlags,
+  pullClientScripts
 } from "../ClientScriptsPuller"
-import acorn,
-{
-  Identifier,
-  Literal,
-  Property
-} from "acorn"
 import { parseSync } from "oxc-parser"
 import { walk } from "estree-walker"
 import { getExperiments } from ".."
 import murmurhash from "murmurhash"
-import { BuildData } from "../Types/BuildData"
+import { BuildData, BuildFlags } from "../Types/BuildData"
 import Logger from "../Logger"
 import { DiscordBranch } from "../Types/DiscordBranch"
 import { Experiment, GuildExperiment } from "../Types/Experiments"
@@ -23,81 +16,113 @@ const logger = new Logger("Util/CompileBuildData");
 
 export async function compileBuildData(branch: DiscordBranch = DiscordBranch.Stable): Promise<BuildData | Error> {
   logger.log("Fetching initial scripts...")
-  const initialScriptsUrls = await fetchInitialScripts(branch);
-  const chunkLoader = await getChunkLoader(branch, initialScriptsUrls);
+  const scripts = await pullClientScripts("full", branch)
 
-  if (initialScriptsUrls == undefined) {
-    logger.error("Failed to fetch initial scripts!")
-    return new Error("Failed to fetch initial scripts!")
+  if (scripts === undefined) {
+    logger.error("Failed to fetch initial scripts");
+    throw new Error("Failed to fetch initial scripts")
   }
 
-  logger.log("Fetching lazy-loaded scripts...")
-  const lazyScriptsUrls = await fetchLazyLoadedScripts(chunkLoader);
-
-  if (lazyScriptsUrls == undefined) {
-    logger.error("Failed to fetch lazy scripts!")
-    return new Error("Failed to fetch lazy scripts!")
-  }
-
-  let initialScripts = new Map<string, string>()
-  let lazyScripts = new Map<string, string>()
-
-  await fetchFilesAndPutThemInMap(branch, initialScriptsUrls, initialScripts, true)
-  await fetchFilesAndPutThemInMap(branch, lazyScriptsUrls, lazyScripts, true)
-
+  let initialScripts = scripts.initial
+  let lazyScripts = scripts.lazy
 
   logger.log("Fetching experiments...")
-  const experiments = await getExperiments(branch)
+  const experiments = await getExperiments(branch, scripts.lazy)
   const strings = new Map<string, string>() as Map<string, string>
 
-  let buildNumber = undefined as number | undefined
-  let versionHash = undefined as string | undefined
-  let languageObjectFile = undefined as string | undefined
+  let clientInfo = {
+    builtAt: undefined as number | undefined,
+    buildNumber: undefined as number | undefined,
+    buildHash: undefined as string | undefined
+  }
 
-  for (let [path, script] of initialScripts) {
+  // Attempts to find a language object or a client info object
+  // from the specified script.
+
+  // :kanadejil:
+  async function findTheOnePiece(script: ClientScript) {
     try {
-      const ast = parseSync(script)
-
+      const content: string = script.content as string
+      const ast = parseSync(content)
 
       walk(JSON.parse(ast.program), {
-        enter(node: any, parent, key, index) {
-          if (node.type !== "ObjectExpression") { return }
+        enter(node: any) {
+          const properties: any[] = node?.properties
 
-          const properties: any[] = node.properties
-          const fileBuildNumber = properties.find(prop => (prop as any)?.key?.name == "buildNumber")
-          const fileVersionHash = properties.find(prop => (prop as any)?.key?.name == "versionHash")
+          if (node.type === "ObjectExpression") {
+            const buildNumber = properties.find(prop => (prop as any)?.key?.name == "buildNumber")
+            const buildHash = properties.find(prop => (prop as any)?.key?.name == "versionHash")
+            const builtAt = properties.find(prop => (prop as any)?.key?.name == "built_at")
 
-          const isBuildObject = fileBuildNumber != undefined && fileVersionHash != undefined
-          const isLanguageObject = properties.find(prop => (prop as any)?.key?.name == "DISCORD") != undefined
+            const isLanguageObject = properties.find(prop => (prop as any)?.key?.name == "DISCORD") != undefined
 
-          if (isLanguageObject == true) {
-            logger.log(`Found the language object!: ${path}`)
-            languageObjectFile = path
-            properties.forEach((node) => {
-              const prop = node as Property
-              const key = prop.key as Identifier
-              const value = prop.value as Literal
+            if (buildNumber !== undefined) {
+              const hasValue = buildNumber.value?.value != undefined
 
-              const keyName = key.name as string
-              strings.set(keyName, '"' + value.value + '"' as string)
-            })
-          } else if (isBuildObject == true) {
-            buildNumber = (fileBuildNumber.value as Literal)?.value as number
-            versionHash = (fileVersionHash.value as Literal)?.value as string
-            logger.log(`Found the buildNumber and versionHash: ${buildNumber}, ${versionHash}`)
+              // For some reason there's a second buildNumber property, in another object
+              // that has a function value..?
+              // :fear:
+
+              if (hasValue !== true) {
+                return
+              }
+
+              clientInfo.buildNumber = parseInt(buildNumber.value?.value) as number
+            }
+            if (buildHash !== undefined) {
+              clientInfo.buildHash = buildHash.value?.value as string
+            }
+            if (builtAt !== undefined) {
+              clientInfo.builtAt = parseInt(builtAt.value?.value) as number
+            }
+
+            if (isLanguageObject == true) {
+              logger.log(`Found the language object!: ${script.path}`)
+              script.flags.push(ScriptFlags.LanguageObject)
+              properties.forEach((node) => {
+                const prop = node as any
+                const key = prop.key as any
+                const value = prop.value as any
+
+                const keyName = key.name as string
+                strings.set(keyName, '"' + value.value + '"' as string)
+              })
+            }
           }
         },
       })
     } catch (err) {
-      logger.error(`Error while parsing ${path}: ${err}`)
-
+      logger.error(`Error while parsing ${script.path}:`)
+      console.error(err)
     }
   }
 
-  if (buildNumber == undefined || versionHash == undefined) {
-    logger.error("Compile error: Couldn't find buildNumber/versionHash! Aborting")
-    return new Error("Couldn't find buildNumber/versionHash")
+  const languageObjectScript = initialScripts.find(script => script.flags.includes(ScriptFlags.LanguageObject))
+  const clientInfoScript = initialScripts.find(script => script.flags.includes(ScriptFlags.ClientInfo))
+
+  if (languageObjectScript === undefined) {
+    logger.error("Could not find any script wit the language_object tag! Aborting !! (the one piece could not be found)")
+    throw new Error("LanguageObject could not be found");
   }
+
+  if (clientInfoScript === undefined) {
+    logger.error("Could not find any script wit the client_info tag! Aborting !! (the one piece could not be found)")
+    throw new Error("Script with a client_info object could not be found");
+  }
+
+  await findTheOnePiece(clientInfoScript)
+  await findTheOnePiece(languageObjectScript)
+
+  if (clientInfo.buildNumber == undefined || clientInfo.buildHash == undefined || clientInfo.builtAt == undefined) {
+    logger.error("Compile error: Couldn't find buildNumber/versionHash/builtAt! Aborting (the one piece couldn't be found)")
+    return new Error("Couldn't find buildNumber/versionHash/builtAt")
+  }
+
+  logger.log(`Build info: 
+    Built at: ${new Date(clientInfo.builtAt)}
+    Build number: ${clientInfo.buildNumber}
+    Build hash: ${clientInfo.buildHash}
+  `)
 
   logger.log(`Compiling experiments..`)
   const mappedExperiments = new Map<string, Experiment>() as Map<string, Experiment>
@@ -143,17 +168,22 @@ export async function compileBuildData(branch: DiscordBranch = DiscordBranch.Sta
   }
 
   const buildData: BuildData = {
-    // Strings: JSON.stringify(Object.fromEntries(strings.entries())),
     strings_diff: [],
     experiments: mappedExperiments,
     date_found: new Date(Date.now()),
+    built_on: new Date(clientInfo.builtAt),
     branches: [branch],
-    flags: [],
-    build_number: buildNumber,
-    build_hash: versionHash as string,
+    flags: [BuildFlags.NeedsStringRediff],
+    build_number: clientInfo.buildNumber,
+    build_hash: clientInfo.buildHash,
+    counts: {
+      experiments: mappedExperiments.size,
+      strings: strings.size,
+    },
     scripts: {
-      initial: initialScriptsUrls,
-      lazy: lazyScriptsUrls,
+      // TODO: add support for the ClientScript type, instead of mapping them to the path
+      initial: initialScripts.map((script) => script.path),
+      lazy: lazyScripts.map((script) => script.path),
     },
   }
 

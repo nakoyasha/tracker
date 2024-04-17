@@ -5,11 +5,11 @@ import murmurhash from "murmurhash";
 import Logger from "./Logger"
 import { ASTPuller } from "./Fetch/ASTPuller";
 import { DiscordBranch } from "./Types/DiscordBranch"
-import { getURLForBranch } from "./Util/GetURLForBranch"
 import { ExperimentPopulationRange } from "./Types/ExperimentRanges";
 import { ExperimentPopulationFilters } from "./Types/ExperimentFilters";
 import { Snowflake } from "./Types/Snowflake";
 import { Experiment, Experiments, GuildExperiment, UserExperimentAssignment } from "./Types/Experiments";
+import { ClientScript, ClientScripts, pullClientScripts } from "./ClientScriptsPuller";
 
 const logger = new Logger("Util/PullExperimentData")
 
@@ -163,8 +163,18 @@ function processUserAssignment(UserAssignment: any[]) {
   } as UserExperimentAssignment
 }
 
-export async function getExperiments(branch: DiscordBranch) {
+export async function getExperiments(branch: DiscordBranch, scripts?: ClientScript[]) {
   try {
+    if (scripts === undefined) {
+      const clientScripts = pullClientScripts("full")
+
+      if (clientScripts === undefined) {
+        throw new Error("Failed to pull client scripts")
+      }
+
+      (scripts as any) = await pullClientScripts("full") as ClientScripts
+    }
+
     const experimentsResult = await axios.get(branch + "/api/v9/experiments?with_guild_experiments=true", {})
 
     const body = experimentsResult.data as ExperimentsHttpResult
@@ -192,13 +202,12 @@ export async function getExperiments(branch: DiscordBranch) {
     }
 
     // pull client experiments last, as its unreliable/slow and :yesyesyes:
-    const clientExperiments = await getClientExperiments("ast", DiscordBranch.Stable)
+    const clientExperiments = await getClientExperiments("ast", DiscordBranch.Stable, scripts)
 
     // @ts-ignore
     Object.entries(clientExperiments).forEach(([experiment_name, experiment]) => {
       if (experiment_name == undefined) {
-        // no idea what causes this..
-        return;
+        experiment_name = "Untitled Experiment"
       }
 
       const hash = murmurhash(experiment_name)
@@ -236,13 +245,13 @@ export async function getExperiments(branch: DiscordBranch) {
 // Performs a (proper) pull on client experiments, which results in hash_key, and the proper name being available.
 // ast - fast
 // puppeter - slow
-export function getClientExperiments(type: "puppeteer" | "ast", branch: DiscordBranch = DiscordBranch.Stable) {
+export function getClientExperiments(type: "puppeteer" | "ast", branch: DiscordBranch = DiscordBranch.Stable, scripts?: ClientScript[]) {
   switch (type) {
     case "puppeteer":
       return new PuppeteerPull().getClientExperiments(branch)
     case "ast":
       // TODO: implement scripts
-      return new ASTPuller().getClientExperiments(branch)
+      return new ASTPuller().getClientExperiments(branch, scripts as ClientScript[])
   }
 }
 

@@ -1,4 +1,4 @@
-import { pullClientScripts } from "../ClientScriptsPuller"
+import { ClientScript, pullClientScripts } from "../ClientScriptsPuller"
 import { ExperimentPuller } from "../ExperimentPuller";
 
 import { parseSync } from "oxc-parser";
@@ -8,6 +8,8 @@ import { DiscordBranch } from "../Types/DiscordBranch"
 import Logger from "../Logger"
 import { Experiment } from "../Types/Experiments";
 import { astToJSValue, isExperiment } from "../Util/AST/ASTToJSValue";
+
+import { SCRIPT_REGEXES } from "../constants"
 
 const logger = new Logger("Util/PullExperimentData/ASTPuller")
 
@@ -39,19 +41,19 @@ export type Treatment = {
 export class ASTPuller implements ExperimentPuller {
   // sometimes axios will throw a weird "socket hang up" error.
   // TODO: handle it properly 
-  async getClientExperiments(branch: DiscordBranch): Promise<void | Experiment[] | undefined> {
+  async getClientExperiments(branch: DiscordBranch, scripts: ClientScript[]): Promise<void | Experiment[] | undefined> {
     const experiments = {} as { [key: string]: any }
 
     try {
-      const scripts = await pullClientScripts("full", branch)
+      for (const script of scripts) {
+        const content: any = script.content as string
+        const hasExperiment = SCRIPT_REGEXES.hasExperiment.test(content)
 
-      if (scripts == undefined) {
-        logger.error("Failed to pull client scripts!")
-        return;
-      }
+        if (hasExperiment === false) {
+          continue
+        }
 
-      for (const [path, script] of scripts) {
-        const ast = parseSync(script)
+        const ast = parseSync(content)
 
         walk(JSON.parse(ast.program), {
           enter: (node) => {

@@ -18,19 +18,25 @@ export type LegacyBuildData = {
 export enum BuildFlags {
   NeedsStringRediff = "needs-string-rediff",
   NeedsExperimentFetch = "needs-experiment-fetch",
-  NeedsScriptFetch = "needs-script-fetch"
+  NeedsScriptFetch = "needs-script-fetch",
+  NeedsRecounting = "needs-recounting",
 }
 
 export type BuildData = {
   build_number: number,
   build_hash: string,
   date_found: Date,
+  built_on: Date,
   branches: DiscordBranch[],
   Branch?: string,
   strings_diff: Diff[],
   experiments: Map<string, Experiment>,
-  diff_against?: String,
+  diff_against?: string,
   flags: BuildFlags[],
+  counts: {
+    strings: number,
+    experiments: number,
+  }
   // Legacy field; ignore!
   strings?: Map<string, string>,
   scripts: {

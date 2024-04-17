@@ -2,20 +2,36 @@ import Logger from "./Logger"
 import parse from "node-html-parser";
 import {
   JS_URL_REGEXES,
+  SCRIPT_REGEXES,
 } from "./constants";
 
 import * as walker from "estree-walker";
 import { parseSync } from "oxc-parser"
 
 import { DiscordBranch } from "./Types/DiscordBranch";
-import { getURLForBranch } from "./Util/GetURLForBranch";
-
 import { fetch, setGlobalDispatcher, Agent } from 'undici'
 
 // otherwise fetch dies while fetching too many files
 setGlobalDispatcher(new Agent({ connect: { timeout: 60_000 } }))
 
 const logger = new Logger("Util/PullClientScripts")
+export type ClientScripts = {
+  initial: ClientScript[],
+  lazy: ClientScript[]
+  totalCount: number,
+}
+
+export enum ScriptFlags {
+  LanguageObject = "language_object",
+  ChunkLoader = "chunk_loader",
+  ClientInfo = "client_info",
+}
+
+export type ClientScript = {
+  path: string,
+  content?: string,
+  flags: ScriptFlags[]
+}
 
 export type FetchedStrings = Map<string, string>
 const IGNORED_FILENAMES = ["NW.js", "Node.js", "bn.js", "hash.js", "utf8str", "t61str", "ia5str", "iso646str"];
@@ -38,30 +54,44 @@ async function fetchScriptFile(branch: DiscordBranch, fileName: string) {
   }
 }
 
-export async function fetchFilesAndPutThemInMap(branch: DiscordBranch, files: string[], map: Map<string, string>, makeItFast?: boolean) {
-  async function fetchFile(file: string) {
-    logger.log(`Fetching script: ${file}`)
+export async function fetchScripts(branch: DiscordBranch, scripts: ClientScript[], makeItFast?: boolean) {
+  async function fetchFile(_script: ClientScript) {
+    // logger.log(`Fetching script: ${file}`)
 
-    const script = await fetchScriptFile(branch, "/assets/" + file)
+    const script = await fetchScriptFile(branch, "/assets/" + _script.path)
     if (script != undefined) {
-      map.set(file, script)
+      _script.content = script
+      // add flags
+      const hasLanguageObject = SCRIPT_REGEXES.hasLanguageObject.test(script)
+      const hasClientInfo = SCRIPT_REGEXES.hasClientInfo.test(script)
+      const hasTheOtherClientInfo = SCRIPT_REGEXES.hasTheOtherClientInfoIDontEvenKnowAnymore.test(script)
+
+      if (hasLanguageObject === true) {
+        _script.flags.push(ScriptFlags.LanguageObject)
+      }
+
+      if (hasClientInfo && hasTheOtherClientInfo) {
+        _script.flags.push(ScriptFlags.ClientInfo)
+      }
     }
+
+
   }
 
   // seperating them because of ratelimits
   if (makeItFast != undefined) {
-    await Promise.all(files.map(async (file) => {
-      await fetchFile(file)
+    await Promise.all(scripts.map(async (script) => {
+      await fetchFile(script)
     }))
   } else {
-    for (let file of files) {
-      await fetchFile(file)
+    for (let script of scripts) {
+      await fetchFile(script)
     }
   }
 }
 
 export async function fetchInitialScripts(branch: DiscordBranch) {
-  let initialScripts: string[] = []
+  let initialScripts: ClientScript[] = []
 
   const appResponse = await fetch(branch + "/app")
   if (!appResponse.ok) {
@@ -83,14 +113,17 @@ export async function fetchInitialScripts(branch: DiscordBranch) {
     }
 
     const relativePath = filePath.replaceAll("/assets/", "")
-    initialScripts.push(relativePath as string)
+    initialScripts.push({
+      path: relativePath,
+      flags: [],
+    })
   }
 
   return initialScripts
 }
 
 export async function fetchLazyLoadedScripts(chunkLoader: string) {
-  let lazyScripts: string[] = []
+  let lazyScripts: ClientScript[] = []
   const ast = parseSync(chunkLoader);
 
   walker.walk(JSON.parse(ast.program), {
@@ -161,7 +194,11 @@ export async function fetchLazyLoadedScripts(chunkLoader: string) {
         if (!chunkHash.endsWith(".js")) {
           chunkHash = `${chunkHash}.js`
         }
-        lazyScripts.push(chunkHash)
+
+        lazyScripts.push({
+          path: chunkHash,
+          flags: [],
+        })
       }
     },
   })
@@ -169,9 +206,9 @@ export async function fetchLazyLoadedScripts(chunkLoader: string) {
   return lazyScripts
 }
 
-export async function getChunkLoader(branch: DiscordBranch, _initialScripts?: string[]) {
+export async function getChunkLoader(branch: DiscordBranch, _initialScripts?: ClientScript[]) {
   const initialScripts = _initialScripts ?? await fetchInitialScripts(branch)
-  const chunkLoader = initialScripts.find((script) => script.startsWith("web"))
+  const chunkLoader = initialScripts.find((script) => script.path.startsWith("web"))?.path
 
   if (chunkLoader == undefined) {
     console.log(`Failed to find the chunk loader in initial scripts!`)
@@ -188,45 +225,39 @@ export async function getChunkLoader(branch: DiscordBranch, _initialScripts?: st
   return file
 }
 
-export async function pullClientScripts(mode: "initial" | "lazy" | "full" = "full", branch: DiscordBranch = DiscordBranch.Stable) {
+export async function pullClientScripts(mode: "initial" | "lazy" | "full" = "full", branch: DiscordBranch = DiscordBranch.Stable): Promise<ClientScripts | undefined> {
   // very janky way to get the scripts.
   // ohwell :airicry:
-  const branchURL = branch
-  let initialScripts: string[] | undefined = undefined
-  let lazyScripts: string[] | undefined = undefined
-
-  const scripts = new Map<string, string>() as Map<string, string>
+  const clientScripts: ClientScripts = {
+    initial: [],
+    lazy: [],
+    totalCount: 0,
+  }
 
   try {
     logger.log("Getting initial scripts");
-    initialScripts = await fetchInitialScripts(branch)
-    logger.log(`Got ${initialScripts.length} initial scripts`);
+    clientScripts.initial = await fetchInitialScripts(branch)
+    logger.log(`Got ${clientScripts.initial.length} initial scripts`);
 
     if (mode === "full" || mode === "initial") {
-      await fetchFilesAndPutThemInMap(branchURL, initialScripts, scripts)
+      await fetchScripts(branch, clientScripts.initial, true)
     }
 
     if (mode === "full" || mode === "lazy") {
       logger.log("Fetching the chunk loader..")
       const chunkLoader = await getChunkLoader(branch)
       logger.log(`Getting every script from the lazy-loaded list. This may take a while!`)
-      lazyScripts = await fetchLazyLoadedScripts(chunkLoader)
+      clientScripts.lazy = await fetchLazyLoadedScripts(chunkLoader)
 
-      await fetchFilesAndPutThemInMap(branchURL, lazyScripts, scripts, true)
+      await fetchScripts(branch, clientScripts.lazy, true)
     }
 
-    if (initialScripts === undefined || lazyScripts === undefined) {
-      logger.error(`The initial or the lazy script array failed to initialize!`)
-      return;
-    }
+    const initialLength = clientScripts.initial.length
+    const lazyLength = clientScripts.lazy.length
 
-    logger.log(`Got ${scripts.size} total scripts, ${initialScripts.length} initial and ${lazyScripts.length} lazy`);
+    logger.log(`Got ${initialLength + lazyLength} total scripts, ${initialLength} initial and ${lazyLength} lazy`);
 
-    // clear out arrays
-    initialScripts = undefined
-    lazyScripts = undefined
-
-    return scripts
+    return clientScripts
   } catch (err) {
     logger.error(`Failure while pulling scripts: ${err}`)
     throw err;
