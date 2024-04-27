@@ -1,3 +1,4 @@
+import { ClientScript } from "../ClientScriptsPuller";
 import type { Diff } from "./Diff";
 import { DiscordBranch } from "./DiscordBranch";
 import { Experiment } from "./Experiments";
@@ -38,9 +39,9 @@ export type BuildData = {
     experiments: number,
   }
   // Legacy field; ignore!
-  strings?: Map<string, string>,
+  schema_version: number,
   scripts: {
-    initial: Array<string>,
-    lazy: Array<string>
+    initial: Array<ClientScript>
+    lazy: Array<ClientScript>
   }
 };

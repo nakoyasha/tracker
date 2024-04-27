@@ -1,25 +1,9 @@
 import { Schema, model } from "mongoose";
-import { BuildData, LegacyBuildData } from "../Types/BuildData"
+import { BuildData } from "../Types/BuildData"
 import { Experiment } from "../Types/Experiments";
 
-export const LegacyBuildSchema = new Schema<LegacyBuildData>({
-  BuildNumber: String,
-  VersionHash: String,
-  Date: Date,
-  Experiments: {
-    type: Map<string, Experiment>,
-    required: true,
-  },
-  Strings: {
-    type: String,
-    required: true
-  },
-  Branch: String,
-  Scripts: {
-    Initial: [String],
-    Lazy: [String],
-  }
-})
+import { ClientScript } from "../ClientScriptsPuller"
+
 
 export const BuildSchema = new Schema<BuildData>({
   build_number: Number,
@@ -29,10 +13,6 @@ export const BuildSchema = new Schema<BuildData>({
   experiments: {
     type: Map<string, Experiment>,
     required: true,
-  },
-  strings: {
-    type: Map<string, string>,
-    required: false,
   },
   strings_diff: [
     {
@@ -64,11 +44,16 @@ export const BuildSchema = new Schema<BuildData>({
     // maybe loop thru every build and find the first one that has a lower build number?
     required: false,
   },
+  schema_version: Number,
   scripts: {
-    initial: [String],
-    lazy: [String],
+    initial: {
+      type: Array<ClientScript>
+    },
+    lazy: {
+      type: Array<ClientScript>
+    }
   }
 });
 
 export const BuildModel = model("Build", BuildSchema, "DiscordBuilds");
-export const LegacyBuildModel = model("LegacyBuild", LegacyBuildSchema, "DiscordBuilds")
+// export const LegacyBuildModel = model("LegacyBuild", LegacyBuildSchema, "DiscordBuilds")
