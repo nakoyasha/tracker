@@ -2,7 +2,11 @@ import { Schema, model } from "mongoose";
 import { Experiment } from "../Types/Experiments";
 
 export const ExperimentSchema = new Schema<Experiment>({
-    type: String,
+    type: {
+        type: String,
+        enum: ["user", "guild"],
+        required: true,
+    },
     hash_key: String,
     hash: String,
     title: String,

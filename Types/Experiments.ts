@@ -2,7 +2,7 @@ import { ExperimentBucketOverride, ExperimentPopulation } from "..";
 
 export type GuildExperiment = {
   hash: number,
-  hash_key?: string,
+  hash_key: string,
   revision: number,
   populations: ExperimentPopulation[]
   overrides: ExperimentBucketOverride[],
@@ -13,7 +13,7 @@ export type GuildExperiment = {
 }
 
 export type Experiment = {
-  hash_key?: string,
+  hash_key: string,
   name: string,
   // The 32-bit hash of the experiment name
   hash: number,
