@@ -1,5 +1,4 @@
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-import axios from "axios"
 import { PuppeteerPull } from "./Fetch/PuppeteerPull";
 import murmurhash from "murmurhash";
 import Logger from "./Logger"
@@ -163,7 +162,7 @@ function processUserAssignment(UserAssignment: any[]) {
   } as UserExperimentAssignment
 }
 
-export async function getExperiments(branch: DiscordBranch, scripts?: ClientScript[]) {
+export async function getExperiments(branch: DiscordBranch, scripts?: ClientScript[], pullClientExperiments?: boolean) {
   try {
     if (scripts === undefined) {
       const clientScripts = pullClientScripts("full")
@@ -175,9 +174,11 @@ export async function getExperiments(branch: DiscordBranch, scripts?: ClientScri
       (scripts as any) = await pullClientScripts("full") as ClientScripts
     }
 
-    const experimentsResult = await axios.get(branch + "/api/v9/experiments?with_guild_experiments=true", {})
-
-    const body = experimentsResult.data as ExperimentsHttpResult
+    const response = await fetch(branch + "/api/v9/experiments?with_guild_experiments=true")
+    if (!response.ok) {
+      throw new Error(`Failed to get guild experiments because the server returned ${response.status}`)
+    }
+    const body = await response.json() as ExperimentsHttpResult
     const resource_id = body.fingerprint
 
     const experiments = {
@@ -201,39 +202,41 @@ export async function getExperiments(branch: DiscordBranch, scripts?: ClientScri
       }
     }
 
-    // pull client experiments last, as its unreliable/slow and :yesyesyes:
-    const clientExperiments = await getClientExperiments("ast", DiscordBranch.Stable, scripts)
+    if (pullClientExperiments === true || pullClientExperiments === undefined) {
+      // pull client experiments last, as its unreliable/slow and :yesyesyes:
+      const clientExperiments = await getClientExperiments("ast", DiscordBranch.Stable, scripts)
 
-    // @ts-ignore
-    Object.entries(clientExperiments).forEach(([experiment_name, experiment]) => {
-      if (experiment_name == undefined) {
-        experiment_name = "Untitled Experiment"
-      }
+      // @ts-ignore
+      Object.entries(clientExperiments).forEach(([experiment_name, experiment]) => {
+        if (experiment_name == undefined) {
+          experiment_name = "Untitled Experiment"
+        }
 
-      const hash = murmurhash(experiment_name)
-      const experimentAssignment =
-        experiments.guild.find((experiment) => experiment.hash == hash)
+        const hash = murmurhash(experiment_name)
+        const experimentAssignment =
+          experiments.guild.find((experiment) => experiment.hash == hash)
 
-      const rolloutPosition = murmurhash(`${experiment_name}:${resource_id}`) % 10000
+        const rolloutPosition = murmurhash(`${experiment_name}:${resource_id}`) % 10000
 
-      const properExperimentObject = {
-        // alias because i cant be bothered to fix types :airicry:
-        // either the server, or the client one
-        hash_key: experimentAssignment?.hash_key || experiment.hash_key,
-        name: experiment_name,
-        hash: hash,
-        buckets: experiment.buckets,
-        title: experiment.title,
-        description: experiment.description,
-        assignment: experimentAssignment,
-        type: experiment.type,
-        revision: experimentAssignment?.revision as number,
-        rollout_position: rolloutPosition,
-        aa_mode: experimentAssignment?.aa_mode as boolean,
-      } as Experiment
+        const properExperimentObject = {
+          // alias because i cant be bothered to fix types :airicry:
+          // either the server, or the client one
+          hash_key: experimentAssignment?.hash_key || experiment.hash_key,
+          name: experiment_name,
+          hash: hash,
+          buckets: experiment.buckets,
+          title: experiment.title,
+          description: experiment.description,
+          assignment: experimentAssignment,
+          type: experiment.type,
+          revision: experimentAssignment?.revision as number,
+          rollout_position: rolloutPosition,
+          aa_mode: experimentAssignment?.aa_mode as boolean,
+        } as Experiment
 
-      experiments.user.push(properExperimentObject)
-    })
+        experiments.user.push(properExperimentObject)
+      })
+    }
 
     return experiments
   } catch (err) {
