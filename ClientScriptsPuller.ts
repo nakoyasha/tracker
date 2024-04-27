@@ -66,16 +66,14 @@ export async function fetchScripts(branch: DiscordBranch, scripts: ClientScript[
       const hasClientInfo = SCRIPT_REGEXES.hasClientInfo.test(script)
       const hasTheOtherClientInfo = SCRIPT_REGEXES.hasTheOtherClientInfoIDontEvenKnowAnymore.test(script)
 
-      if (hasLanguageObject === true) {
+      if (hasLanguageObject === true && _script.flags.find((flag) => flag === ScriptFlags.LanguageObject) === undefined) {
         _script.flags.push(ScriptFlags.LanguageObject)
       }
 
-      if (hasClientInfo && hasTheOtherClientInfo) {
+      if (hasClientInfo === true || hasTheOtherClientInfo === true && _script.flags.find((flag) => flag === ScriptFlags.ClientInfo) === undefined) {
         _script.flags.push(ScriptFlags.ClientInfo)
       }
     }
-
-
   }
 
   // seperating them because of ratelimits
@@ -90,10 +88,11 @@ export async function fetchScripts(branch: DiscordBranch, scripts: ClientScript[
   }
 }
 
-export async function fetchInitialScripts(branch: DiscordBranch) {
+export async function fetchInitialScripts(branch: DiscordBranch, overrideUrl?: string) {
   let initialScripts: ClientScript[] = []
+  const url = overrideUrl !== undefined ? `${branch}/${overrideUrl}` : `${branch}/app`
+  const appResponse = await fetch(url)
 
-  const appResponse = await fetch(branch + "/app")
   if (!appResponse.ok) {
     logger.error("Failed to fetch the initial dom? Response code: " + appResponse.status);
     throw new Error(`Failed to fetch the initial dom! ${appResponse.status}`);
@@ -154,7 +153,27 @@ export async function fetchLazyLoadedScripts(chunkLoader: string) {
           chunkHash = `${_chunkID}${_chunkHash}`
           isChunk = true
         } else {
-          console.log(_chunkID, _chunkHash)
+        }
+      }
+
+      if (node.type === "ObjectProperty") {
+        const key = node?.key
+        const value = node?.value
+
+        const _chunkId = key?.value
+        const _chunkHash = value?.value
+
+        // why would we parse numbers..
+        if (typeof _chunkHash !== "string") {
+          return;
+        }
+
+        if (_chunkHash !== undefined) {
+          if (_chunkHash.endsWith(".js")) {
+            chunkID = Number.parseInt(_chunkId)
+            chunkHash = `${_chunkHash}`
+            isChunk = true
+          }
         }
       }
 
@@ -189,8 +208,8 @@ export async function fetchLazyLoadedScripts(chunkLoader: string) {
         }
       }
 
+
       if (isChunk === true && chunkID !== undefined && chunkHash !== undefined) {
-        console.log(`ChunkID: ${chunkID}, Hash: ${chunkHash}`)
         if (!chunkHash.endsWith(".js")) {
           chunkHash = `${chunkHash}.js`
         }
@@ -206,8 +225,8 @@ export async function fetchLazyLoadedScripts(chunkLoader: string) {
   return lazyScripts
 }
 
-export async function getChunkLoader(branch: DiscordBranch, _initialScripts?: ClientScript[]) {
-  const initialScripts = _initialScripts ?? await fetchInitialScripts(branch)
+export async function getChunkLoader(branch: DiscordBranch, overrideUrl?: string) {
+  const initialScripts = await fetchInitialScripts(branch, overrideUrl)
   const chunkLoader = initialScripts.find((script) => script.path.startsWith("web"))?.path
 
   if (chunkLoader == undefined) {
@@ -225,7 +244,7 @@ export async function getChunkLoader(branch: DiscordBranch, _initialScripts?: Cl
   return file
 }
 
-export async function pullClientScripts(mode: "initial" | "lazy" | "full" = "full", branch: DiscordBranch = DiscordBranch.Stable): Promise<ClientScripts | undefined> {
+export async function pullClientScripts(mode: "initial" | "lazy" | "full" = "full", branch: DiscordBranch = DiscordBranch.Stable, versionHash?: string): Promise<ClientScripts | undefined> {
   // very janky way to get the scripts.
   // ohwell :airicry:
   const clientScripts: ClientScripts = {
@@ -236,7 +255,7 @@ export async function pullClientScripts(mode: "initial" | "lazy" | "full" = "ful
 
   try {
     logger.log("Getting initial scripts");
-    clientScripts.initial = await fetchInitialScripts(branch)
+    clientScripts.initial = await fetchInitialScripts(branch, versionHash)
     logger.log(`Got ${clientScripts.initial.length} initial scripts`);
 
     if (mode === "full" || mode === "initial") {
@@ -245,9 +264,15 @@ export async function pullClientScripts(mode: "initial" | "lazy" | "full" = "ful
 
     if (mode === "full" || mode === "lazy") {
       logger.log("Fetching the chunk loader..")
-      const chunkLoader = await getChunkLoader(branch)
+      const chunkLoader = await getChunkLoader(branch, versionHash)
       logger.log(`Getting every script from the lazy-loaded list. This may take a while!`)
+
       clientScripts.lazy = await fetchLazyLoadedScripts(chunkLoader)
+
+      if (clientScripts.lazy.length === 0) {
+        logger.error("Catastrophic Failure: Could not find any lazy scripts in the chunkloader!!")
+        throw new Error("Catastrophic failure!")
+      }
 
       await fetchScripts(branch, clientScripts.lazy, true)
     }
