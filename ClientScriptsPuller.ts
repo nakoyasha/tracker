@@ -36,7 +36,7 @@ export type ClientScript = {
 export type FetchedStrings = Map<string, string>
 const IGNORED_FILENAMES = ["NW.js", "Node.js", "bn.js", "hash.js", "utf8str", "t61str", "ia5str", "iso646str"];
 
-async function fetchScriptFile(branch: DiscordBranch, fileName: string) {
+export async function fetchScriptFile(branch: DiscordBranch, fileName: string) {
   const url = new URL(fileName, branch)
   try {
     const response = await fetch(url)

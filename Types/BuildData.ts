@@ -30,7 +30,10 @@ export type BuildData = {
   built_on: Date,
   branches: DiscordBranch[],
   Branch?: string,
-  strings_diff: Diff[],
+  diffs: {
+    experiments: Diff[],
+    strings: Diff[],
+  },
   experiments: Map<string, Experiment>,
   diff_against?: string,
   flags: BuildFlags[],

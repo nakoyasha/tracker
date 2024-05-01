@@ -12,6 +12,8 @@ import { ASTStringsPlugin } from "../AST/Strings"
 import { ASTClientInfoPlugin, ClientInfo } from "../AST/ClientInfo"
 import assert from "node:assert"
 import { getExperiments } from ".."
+import { DatabaseSystem } from "@system/DatabaseSystem"
+import { makeBuildDiff } from "../Diff/MakeBuildDiff"
 
 const logger = new Logger("Util/CompileBuildData");
 
@@ -108,10 +110,12 @@ export async function compileBuildData(branch: DiscordBranch = DiscordBranch.Sta
     pushGuildExperiment(experiment)
   }
 
-  // const diff = await makeBuildDiff(initialScripts, (await lastBuild).scripts)
 
   const buildData: BuildData = {
-    strings_diff: [],
+    diffs: {
+      experiments: [],
+      strings: [],
+    },
     experiments: mappedExperiments,
     date_found: new Date(Date.now()),
     built_on: new Date(clientInfo.built_at),
@@ -138,6 +142,27 @@ export async function compileBuildData(branch: DiscordBranch = DiscordBranch.Sta
         }
       }),
     },
+  }
+  logger.log("Fetching the last saved build..")
+  const lastBuild = await DatabaseSystem.getLastBuild(branch)
+
+  if (lastBuild !== null) {
+    try {
+      logger.log(`Last build found: ${lastBuild.build_hash}, computing difference..`)
+      const diffs = await makeBuildDiff(branch, buildData, lastBuild)
+
+      // TODO: don't throw away the experiments (i have to update the schema again..)
+      buildData.diffs = {
+        strings: diffs.strings,
+        experiments: diffs.experiments
+      }
+      buildData.diff_against = lastBuild.build_hash
+      logger.log(`Computed difference successfully! ${diffs.strings.length} strings changed, ${diffs.experiments.length} experiments changed`)
+    } catch (err) {
+      logger.error(`Failed to compute diffs~!`)
+      console.log(err)
+      throw err;
+    }
   }
 
   logger.log(`Build ${buildData.build_number} has been compiled!\n

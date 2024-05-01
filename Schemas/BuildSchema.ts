@@ -14,19 +14,38 @@ export const BuildSchema = new Schema<BuildData>({
     type: Map<string, Experiment>,
     required: true,
   },
-  strings_diff: [
-    {
-      type: {
-        type: String,
-        enum: ["added", "removed", "changed"],
-        required: true,
-      },
-      key: String,
-      value: String,
-      newValue: String,
-      oldValue: String,
-    }
-  ],
+  diffs: {
+    experiments: [
+      {
+        type: {
+          type: String,
+          enum: ["added", "removed", "changed"],
+          required: true,
+        },
+        key: String,
+        value: String,
+      }
+    ],
+    strings: [
+      {
+        type: {
+          type: String,
+          enum: ["added", "removed", "changed"],
+          required: true,
+        },
+        key: String,
+        value: String,
+        newValue: {
+          type: String,
+          required: false
+        },
+        oldValue: {
+          type: String,
+          required: false
+        },
+      }
+    ]
+  },
   flags: [{
     type: String,
     enum: ["needs-string-rediff", "needs-experiment-fetch", "needs-script-fetch", "needs-recounting"],
