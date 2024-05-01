@@ -1,4 +1,4 @@
-const expFields = ["kind", "id", "label"];
+const expFields = ["kind", "id", "label", "treatments"];
 const ignoreFields = ["defaultConfig", "config"];
 
 export function isEnumExpression(node: any): boolean {

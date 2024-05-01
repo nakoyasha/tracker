@@ -1,4 +1,4 @@
-import { ClientScript, pullClientScripts } from "../ClientScriptsPuller"
+import { ClientScript } from "../ClientScriptsPuller"
 import { ExperimentPuller } from "../ExperimentPuller";
 
 import { parseSync } from "oxc-parser";
@@ -7,13 +7,19 @@ import { walk } from "estree-walker"
 import { DiscordBranch } from "../Types/DiscordBranch"
 import Logger from "../Logger"
 import { Experiment } from "../Types/Experiments";
-import { astToJSValue, isExperiment } from "../Util/AST/ASTToJSValue";
+import { astToJSValue, hasProperty, isExperiment } from "../Util/AST/ASTToJSValue";
 
 import { SCRIPT_REGEXES } from "../constants"
 
 const logger = new Logger("Util/PullExperimentData/ASTPuller")
 
-export function parseTreatments(Array: any) {
+const TREATMENT_FIELDS = ["id", "label", "config"]
+
+function isTreatment(treatmentNode: any) {
+  return TREATMENT_FIELDS.every((prop) => hasProperty(treatmentNode, prop));
+}
+
+export function parseTreatments(Array: any, script: ClientScript, node: any, experimentHash: string) {
   if (Array.type !== "ArrayExpression") {
     logger.warn(`Encountered an unknown type while parsing treatments: ${Array.type}`)
     return []
@@ -23,8 +29,18 @@ export function parseTreatments(Array: any) {
   const parsedTreatments = [] as Treatment[]
 
   treatments.forEach((treatment: any) => {
-    const _treatment: Treatment = astToJSValue(treatment)
-    parsedTreatments.push(_treatment)
+    // for very rare cases
+    if (treatment.type != "ObjectExpression") {
+      return;
+    }
+    try {
+      if (isTreatment(treatment) == true) {
+        const _treatment: Treatment = astToJSValue(treatment)
+        parsedTreatments.push(_treatment)
+      }
+    } catch (err) {
+      logger.error(`Failed to parse experiment ${experimentHash} treatment ${treatment.type} in script ${script.path}: ${err} : \n${script.content?.substring(node.start, node.end)}\n ${treatment}`)
+    }
   })
 
   return parsedTreatments
@@ -39,13 +55,14 @@ export type Treatment = {
 }
 
 export class ASTPuller implements ExperimentPuller {
-  // sometimes axios will throw a weird "socket hang up" error.
-  // TODO: handle it properly 
-  async getClientExperiments(branch: DiscordBranch, scripts: ClientScript[]): Promise<void | Experiment[] | undefined> {
+  // experimentspuller demands we have a DiscordBranch type parameter first
+  // but we don't need it here..
+  // so let's ignore it!
+  async getClientExperiments(_: DiscordBranch, scripts: ClientScript[]): Promise<void | Experiment[] | undefined> {
     const experiments = {} as { [key: string]: any }
 
-    try {
-      for (const script of scripts) {
+    for (const script of scripts) {
+      try {
         const content: any = script.content as string
         const hasExperiment = SCRIPT_REGEXES.hasExperiment.test(content)
 
@@ -70,7 +87,7 @@ export class ASTPuller implements ExperimentPuller {
             const idValue = (id as any)?.value?.value
 
             if (isExperiment(node)) {
-              const parsedTreatments = parseTreatments((treatments as any)?.value)
+              const parsedTreatments = parseTreatments((treatments as any)?.value, script, node, idValue)
               experiments[idValue] = {
                 type: kindValue,
                 hash_key: idValue,
@@ -82,10 +99,10 @@ export class ASTPuller implements ExperimentPuller {
             }
           }
         })
+      } catch (err) {
+        console.log(err)
+        logger.error(`ASTPuller encountered an error while getting the AST tree of file ${script.path}: ${err}`)
       }
-    } catch (err) {
-      console.log(err)
-      logger.error(`ASTPuller failure: ${err}`)
     }
 
     return experiments as Experiment[]

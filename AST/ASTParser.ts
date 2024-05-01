@@ -39,17 +39,22 @@ export class ASTParser {
         }
 
         if (meetsAllRequirements === true) {
-          const ast = parseSync((script as any).content)
+          try {
+            const ast = parseSync((script as any).content)
 
-          walk(JSON.parse(ast.program), {
-            enter: (node) => {
-              try {
-                plugin.run(script, node)
-              } catch (err) {
-                logger.error(`Plugin ${plugin.name} has failed to parse ${script.path}: ${err}`)
+            walk(JSON.parse(ast.program), {
+              enter: (node) => {
+                try {
+                  plugin.run(script, node)
+                } catch (err) {
+                  logger.error(`Plugin ${plugin.name} has failed to parse ${script.path}: ${err}`)
+                }
               }
-            }
-          })
+            })
+          } catch (err) {
+            logger.error(`Script ${script.path} could not be parsed! ${err}`)
+            continue;
+          }
           const result = plugin.finish()
 
           this.results.set(plugin.name, result)
