@@ -30,7 +30,7 @@ export class ASTStringsPlugin implements ASTPlugin {
         const value = prop.value as any
 
         const keyName = key.name as string
-        this.strings.set(keyName, '"' + value.value + '"' as string)
+        this.strings.set(keyName, value.value as string)
       })
     }
   }
