@@ -5,6 +5,34 @@ import { Experiment } from "../Types/Experiments";
 import { ClientScript } from "../ClientScriptsPuller"
 
 
+const StringDiff = {
+  type: {
+    type: String,
+    enum: ["added", "removed", "changed"],
+    required: true,
+  },
+  key: String,
+  value: String,
+  newValue: {
+    type: String,
+    required: false
+  },
+  oldValue: {
+    type: String,
+    required: false
+  },
+}
+
+const RegularDiff = {
+  type: {
+    type: String,
+    enum: ["added", "removed", "changed"],
+    required: true,
+  },
+  key: String,
+  value: String,
+}
+
 export const BuildSchema = new Schema<BuildData>({
   build_number: Number,
   build_hash: String,
@@ -16,34 +44,13 @@ export const BuildSchema = new Schema<BuildData>({
   },
   diffs: {
     experiments: [
-      {
-        type: {
-          type: String,
-          enum: ["added", "removed", "changed"],
-          required: true,
-        },
-        key: String,
-        value: String,
-      }
+      RegularDiff,
     ],
     strings: [
-      {
-        type: {
-          type: String,
-          enum: ["added", "removed", "changed"],
-          required: true,
-        },
-        key: String,
-        value: String,
-        newValue: {
-          type: String,
-          required: false
-        },
-        oldValue: {
-          type: String,
-          required: false
-        },
-      }
+      StringDiff,
+    ],
+    endpoints: [
+      StringDiff,
     ]
   },
   flags: [{
