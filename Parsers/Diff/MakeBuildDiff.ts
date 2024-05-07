@@ -28,7 +28,7 @@ export async function getStrings(branch: DiscordBranch, build: BuildData) {
     await parser.parse([languageObject])
     return parser.getResult<ASTString>("strings")
   } else {
-    throw new Error("[FATAL] Could not find any script with the language_object flag! Build ${build.build_number} probably needs a refetch !!!")
+    throw new Error(`[FATAL] Could not find any script with the language_object flag! Build: ${build.build_number}`)
   }
 }
 
