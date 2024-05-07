@@ -2,10 +2,8 @@ import { ClientScript, ScriptFlags } from "../../ClientScriptsPuller"
 
 import Logger from "../../Logger"
 import { Experiment, ExperimentType } from "../../Types/Experiments";
-import { astToJSValue, hasProperty, isExperiment } from "../../Util/AST/ASTToJSValue";
 import { ASTPlugin } from "../../Parsers/ASTPlugin";
 import assert from "node:assert";
-import exp from "node:constants";
 import murmurhash from "murmurhash";
 
 const logger = new Logger("Util/PullExperimentData/ASTPuller")
