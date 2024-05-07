@@ -25,6 +25,7 @@ export enum ScriptFlags {
   LanguageObject = "language_object",
   ChunkLoader = "chunk_loader",
   ClientInfo = "client_info",
+  Experiments = "experiments",
 }
 
 export type ClientScript = {
@@ -65,6 +66,7 @@ export async function fetchScripts(branch: DiscordBranch, scripts: ClientScript[
       const hasLanguageObject = SCRIPT_REGEXES.hasLanguageObject.test(script)
       const hasClientInfo = SCRIPT_REGEXES.hasClientInfo.test(script)
       const hasTheOtherClientInfo = SCRIPT_REGEXES.hasTheOtherClientInfoIDontEvenKnowAnymore.test(script)
+      const hasExperiments = SCRIPT_REGEXES.hasExperiment.test(script)
 
       if (hasLanguageObject === true && _script.flags.find((flag) => flag === ScriptFlags.LanguageObject) === undefined) {
         _script.flags.push(ScriptFlags.LanguageObject)
@@ -72,6 +74,10 @@ export async function fetchScripts(branch: DiscordBranch, scripts: ClientScript[
 
       if (hasClientInfo === true || hasTheOtherClientInfo === true && _script.flags.find((flag) => flag === ScriptFlags.ClientInfo) === undefined) {
         _script.flags.push(ScriptFlags.ClientInfo)
+      }
+
+      if (hasExperiments && _script.flags.find((flag) => flag === ScriptFlags.Experiments) === undefined) {
+        _script.flags.push(ScriptFlags.Experiments)
       }
     }
   }
@@ -253,6 +259,8 @@ export async function pullClientScripts(mode: "initial" | "lazy" | "full" = "ful
     totalCount: 0,
   }
 
+
+  console.time("Scraping scripts")
   try {
     logger.log("Getting initial scripts");
     clientScripts.initial = await fetchInitialScripts(branch, versionHash)
@@ -280,6 +288,7 @@ export async function pullClientScripts(mode: "initial" | "lazy" | "full" = "ful
     const initialLength = clientScripts.initial.length
     const lazyLength = clientScripts.lazy.length
 
+    console.timeEnd("Scraping scripts")
     logger.log(`Got ${initialLength + lazyLength} total scripts, ${initialLength} initial and ${lazyLength} lazy`);
 
     return clientScripts

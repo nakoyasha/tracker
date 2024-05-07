@@ -1,16 +1,21 @@
 {
   "name": "@mizuki-bot/tracker",
-  "version": "0.0.1",
+  "version": "v0.1.0",
   "homepage": "https://github.com/nakoyasha/tracker",
   "types": "index.ts",
   "main": "index.ts",
+  "author": {
+    "name": "Takahashi Haruka",
+    "url": "https://shiroko.me"
+  },
   "dependencies": {
     "acorn": "^8.11.3",
     "acorn-walk": "^8.3.2",
     "estree-walker": "2.0.2",
-    "puppeteer": "^21.7.0",
     "murmurhash": "^2.0.1",
+    "node-html-parser": "^6.1.13",
     "oxc-parser": "^0.8.0",
+    "puppeteer": "^21.7.0",
     "undici": "^6.13.0"
   },
   "devDependencies": {

@@ -12,6 +12,12 @@ export type GuildExperiment = {
   aa_mode: boolean,
 }
 
+export enum ExperimentType {
+  User = "user",
+  Guild = "guild",
+  None = "none",
+}
+
 export type Experiment = {
   hash_key: string,
   name: string,
@@ -21,7 +27,8 @@ export type Experiment = {
   // The names for the buckets (aka treatments)
   description: string[],
   title: string,
-  type: "user" | "guild",
+  // backwards compat
+  type: ExperimentType | string,
   assignment?: UserExperimentAssignment | GuildExperiment,
   // The requester's rollout position in the experiment.
   revision?: number,
@@ -38,13 +45,13 @@ export type MinExperiment = {
   // The names for the buckets (aka treatments)
   description: string[],
   title: string,
-  type: "user" | "guild",
+  // backwards compat
+  type: ExperimentType | string,
 }
 
 export type Experiments = {
   assignments: UserExperimentAssignment[],
-  user: Experiment[],
-  guild: GuildExperiment[],
+  experiments: GuildExperiment[],
 }
 
 export type UserExperimentAssignment = {

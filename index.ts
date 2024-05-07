@@ -1,14 +1,14 @@
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { PuppeteerPull } from "./Fetch/PuppeteerPull";
-import murmurhash from "murmurhash";
+import { PuppeteerPull } from "./Parsers/Experiments/PuppeteerPull";
 import Logger from "./Logger"
-import { ASTPuller } from "./Fetch/ASTPuller";
 import { DiscordBranch } from "./Types/DiscordBranch"
 import { ExperimentPopulationRange } from "./Types/ExperimentRanges";
 import { ExperimentPopulationFilters } from "./Types/ExperimentFilters";
 import { Snowflake } from "./Types/Snowflake";
 import { Experiment, Experiments, GuildExperiment, UserExperimentAssignment } from "./Types/Experiments";
-import { ClientScript, ClientScripts, pullClientScripts } from "./ClientScriptsPuller";
+import { ClientScript } from "./ClientScriptsPuller";
+import { ASTParser } from "./Parsers/ASTParser";
+import { ASTExperiments } from "./Parsers/Experiments/ASTExperiments";
 
 const logger = new Logger("Util/PullExperimentData")
 
@@ -162,29 +162,16 @@ function processUserAssignment(UserAssignment: any[]) {
   } as UserExperimentAssignment
 }
 
-export async function getExperiments(branch: DiscordBranch, scripts?: ClientScript[], pullClientExperiments?: boolean) {
+export async function getGuildExperiments(branch: DiscordBranch) {
   try {
-    if (scripts === undefined) {
-      const clientScripts = pullClientScripts("full")
-
-      if (clientScripts === undefined) {
-        throw new Error("Failed to pull client scripts")
-      }
-
-      (scripts as any) = await pullClientScripts("full") as ClientScripts
-    }
-
     const response = await fetch(branch + "/api/v9/experiments?with_guild_experiments=true")
     if (!response.ok) {
       throw new Error(`Failed to get guild experiments because the server returned ${response.status}`)
     }
     const body = await response.json() as ExperimentsHttpResult
-    const resource_id = body.fingerprint
-
     const experiments = {
       assignments: [],
-      user: [],
-      guild: [],
+      experiments: [],
     } as Experiments
 
     body.assignments.forEach(userAssignment => {
@@ -198,49 +185,13 @@ export async function getExperiments(branch: DiscordBranch, scripts?: ClientScri
       if (experiment.hash_key != null) {
         // typescript doesnt like me casting it as a string here... for some reason?
         // soo weird 
-        experiments.guild.push(experiment)
+        experiments.experiments.push(experiment)
       }
-    }
-
-    if (pullClientExperiments === true || pullClientExperiments === undefined) {
-      // pull client experiments last, as its unreliable/slow and :yesyesyes:
-      const clientExperiments = await getClientExperiments("ast", DiscordBranch.Stable, scripts)
-
-      // @ts-ignore
-      Object.entries(clientExperiments).forEach(([experiment_name, experiment]) => {
-        if (experiment_name == undefined) {
-          experiment_name = "Untitled Experiment"
-        }
-
-        const hash = murmurhash(experiment_name)
-        const experimentAssignment =
-          experiments.guild.find((experiment) => experiment.hash == hash)
-
-        const rolloutPosition = murmurhash(`${experiment_name}:${resource_id}`) % 10000
-
-        const properExperimentObject = {
-          // alias because i cant be bothered to fix types :airicry:
-          // either the server, or the client one
-          hash_key: experimentAssignment?.hash_key || experiment.hash_key,
-          name: experiment_name,
-          hash: hash,
-          buckets: experiment.buckets,
-          title: experiment.title,
-          description: experiment.description,
-          assignment: experimentAssignment,
-          type: experiment.type,
-          revision: experimentAssignment?.revision as number,
-          rollout_position: rolloutPosition,
-          aa_mode: experimentAssignment?.aa_mode as boolean,
-        } as Experiment
-
-        experiments.user.push(properExperimentObject)
-      })
     }
 
     return experiments
   } catch (err) {
-    logger.error(`Error while pulling experiments: ${err}`)
+    logger.error(`Error while pulling guild experiments: ${err}`)
     throw err;
   }
 }
@@ -248,13 +199,23 @@ export async function getExperiments(branch: DiscordBranch, scripts?: ClientScri
 // Performs a (proper) pull on client experiments, which results in hash_key, and the proper name being available.
 // ast - fast
 // puppeter - slow
-export function getClientExperiments(type: "puppeteer" | "ast", branch: DiscordBranch = DiscordBranch.Stable, scripts?: ClientScript[]) {
+export async function getClientExperiments(type: "puppeteer" | "ast", branch: DiscordBranch = DiscordBranch.Stable, scripts?: ClientScript[]) {
   switch (type) {
     case "puppeteer":
       return new PuppeteerPull().getClientExperiments(branch)
     case "ast":
-      // TODO: implement scripts
-      return new ASTPuller().getClientExperiments(branch, scripts as ClientScript[])
+      if (scripts === undefined) {
+        return;
+      }
+
+      const parser = new ASTParser([
+        new ASTExperiments()
+      ])
+
+      await parser.parse(scripts)
+      const experiments = parser.getResult<Experiment[]>("experiments")
+
+      return experiments;
   }
 }
 
