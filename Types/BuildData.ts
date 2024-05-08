@@ -17,7 +17,11 @@ export type LegacyBuildData = {
 };
 
 export enum BuildFlags {
+  /**
+  * @deprecated Use NeedsRediff instead!
+  */
   NeedsStringRediff = "needs-string-rediff",
+  NeedsRediff = "needs-rediff",
   NeedsExperimentFetch = "needs-experiment-fetch",
   NeedsScriptFetch = "needs-script-fetch",
   NeedsRecounting = "needs-recounting",
