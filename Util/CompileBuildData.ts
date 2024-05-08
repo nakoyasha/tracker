@@ -30,8 +30,6 @@ export async function compileBuildData(branch: DiscordBranch = DiscordBranch.Sta
   let lazyScripts = scripts.lazy
 
   logger.log("Fetching experiments..")
-
-  // ts silliness
   let experiments = await getGuildExperiments(branch)
   const guildExperiments = experiments.experiments
 
@@ -61,12 +59,6 @@ export async function compileBuildData(branch: DiscordBranch = DiscordBranch.Sta
   assert(clientInfo.build_number != undefined, "Compile error: Couldn't find buildNumber!")
   assert(clientInfo.build_hash != undefined, "Compile error: Couldn't find buildHash!")
   assert(clientInfo.built_at != undefined, "Compile error: Couldn't find builtAt!")
-
-  logger.log(`Build info: 
-    Built at: ${new Date(clientInfo.built_at)}
-    Build number: ${clientInfo.build_number}
-    Build hash: ${clientInfo.build_hash}
-  `)
 
   logger.log(`Compiling experiments..`)
   const mappedExperiments = new Map<string, Experiment>() as Map<string, Experiment>
@@ -120,9 +112,10 @@ export async function compileBuildData(branch: DiscordBranch = DiscordBranch.Sta
     date_found: new Date(Date.now()),
     built_on: new Date(clientInfo.built_at),
     branches: [branch],
-    flags: [BuildFlags.NeedsStringRediff],
+    flags: [],
     build_number: clientInfo.build_number,
     build_hash: clientInfo.build_hash,
+    latest: [branch],
     counts: {
       experiments: mappedExperiments.size,
       strings: strings.size,
@@ -145,7 +138,7 @@ export async function compileBuildData(branch: DiscordBranch = DiscordBranch.Sta
   }
   if (lastBuild !== undefined) {
     try {
-      logger.log(`Last build found: ${lastBuild.build_hash}, computing difference..`)
+      logger.log(`Computing difference between build ${buildData.build_hash} and ${lastBuild.build_hash}`)
       const diffs = await makeBuildDiff(branch, buildData, lastBuild)
 
       // TODO: don't throw away the experiments (i have to update the schema again..)
@@ -157,14 +150,19 @@ export async function compileBuildData(branch: DiscordBranch = DiscordBranch.Sta
       logger.log(`Computed difference successfully! ${diffs.strings.length} strings changed, ${diffs.experiments.length} experiments changed`)
     } catch (err) {
       logger.error(`Failed to compute diffs~!`)
-      console.log(err)
+      buildData.flags.push(BuildFlags.NeedsRediff)
+      console.error(err)
       throw err;
     }
   }
 
   logger.log(`Build ${buildData.build_number} has been compiled!\n
   Experiments: ${buildData.counts.experiments}
-  Strings: ${buildData.counts.strings}
+  Strings: ${buildData.counts.strings}\n
+  \n
+  Built at: ${new Date(clientInfo.built_at)}\n
+  Build number: ${clientInfo.build_number}\n
+  Build hash: ${clientInfo.build_hash}\n
   `)
   return buildData
 }
