@@ -62,6 +62,7 @@ export const BuildSchema = new Schema<BuildData>({
     strings: Number,
     experiments: Number,
   },
+  latest: [String],
   branches: [String],
   diff_against: {
     type: String,
