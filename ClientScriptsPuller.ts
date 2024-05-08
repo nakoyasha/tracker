@@ -57,32 +57,34 @@ export async function fetchScriptFile(branch: DiscordBranch, fileName: string) {
 
 export async function fetchScripts(branch: DiscordBranch, scripts: ClientScript[], makeItFast?: boolean) {
   async function fetchFile(_script: ClientScript) {
-    // logger.log(`Fetching script: ${file}`)
-
     const script = await fetchScriptFile(branch, "/assets/" + _script.path)
     if (script != undefined) {
       _script.content = script
       // add flags
+      const flags = new Set<ScriptFlags>(_script.flags)
+
       const hasLanguageObject = SCRIPT_REGEXES.hasLanguageObject.test(script)
       const hasClientInfo = SCRIPT_REGEXES.hasClientInfo.test(script)
       const hasTheOtherClientInfo = SCRIPT_REGEXES.hasTheOtherClientInfoIDontEvenKnowAnymore.test(script)
       const hasExperiments = SCRIPT_REGEXES.hasExperiment.test(script)
 
-      if (hasLanguageObject === true && _script.flags.find((flag) => flag === ScriptFlags.LanguageObject) === undefined) {
-        _script.flags.push(ScriptFlags.LanguageObject)
+      if (hasLanguageObject) {
+        flags.add(ScriptFlags.LanguageObject)
       }
 
-      if (hasClientInfo === true || hasTheOtherClientInfo === true && _script.flags.find((flag) => flag === ScriptFlags.ClientInfo) === undefined) {
-        _script.flags.push(ScriptFlags.ClientInfo)
+      if (hasClientInfo || hasTheOtherClientInfo) {
+        flags.add(ScriptFlags.ClientInfo)
       }
 
-      if (hasExperiments && _script.flags.find((flag) => flag === ScriptFlags.Experiments) === undefined) {
-        _script.flags.push(ScriptFlags.Experiments)
+      if (hasExperiments) {
+        flags.add(ScriptFlags.Experiments)
       }
+
+      _script.flags = Array.from(flags)
     }
   }
 
-  // seperating them because of ratelimits
+  // seperating them because of ratelimits or something?
   if (makeItFast != undefined) {
     await Promise.all(scripts.map(async (script) => {
       await fetchFile(script)
