@@ -32,8 +32,8 @@ export type BuildData = {
   build_hash: string,
   date_found: Date,
   built_on: Date,
-  latest: DiscordBranch[],
-  branches: DiscordBranch[],
+  latest: Set<DiscordBranch>,
+  branches: Set<DiscordBranch>,
   diffs: {
     experiments: Diff[],
     strings: Diff[],

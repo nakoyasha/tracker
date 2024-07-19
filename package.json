@@ -1,7 +1,7 @@
 {
   "name": "@mizuki-bot/tracker",
   "version": "v0.1.0",
-  "homepage": "https://github.com/nakoyasha/tracker",
+  "homepage": "https://shiroko.me/trackers/",
   "types": "index.ts",
   "main": "index.ts",
   "author": {

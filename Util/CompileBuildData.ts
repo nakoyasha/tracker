@@ -54,7 +54,7 @@ export async function compileBuildData(branch: DiscordBranch = DiscordBranch.Sta
   await parser.parse([...lazyScripts, ...initialScripts])
   const clientInfo = parser.getResult<ClientInfo>("client-info")
   const strings = parser.getResult<Map<string, string>>("strings")
-  const userExperiments = parser.getResult<Experiment[]>("experiments")
+  const userExperiments = parser.getResult<Experiment[]>("experiments") || []
 
   assert(clientInfo.build_number != undefined, "Compile error: Couldn't find buildNumber!")
   assert(clientInfo.build_hash != undefined, "Compile error: Couldn't find buildHash!")
@@ -111,11 +111,11 @@ export async function compileBuildData(branch: DiscordBranch = DiscordBranch.Sta
     experiments: mappedExperiments,
     date_found: new Date(Date.now()),
     built_on: new Date(clientInfo.built_at),
-    branches: [branch],
+    branches: new Set([branch]),
     flags: [],
     build_number: clientInfo.build_number,
     build_hash: clientInfo.build_hash,
-    latest: [branch],
+    latest: new Set([branch]),
     counts: {
       experiments: mappedExperiments.size,
       strings: strings.size,

@@ -35,7 +35,7 @@ export type ClientScript = {
 }
 
 export type FetchedStrings = Map<string, string>
-const IGNORED_FILENAMES = ["NW.js", "Node.js", "bn.js", "hash.js", "utf8str", "t61str", "ia5str", "iso646str"];
+const IGNORED_FILENAMES = ["NW.js", "Node.js", "bn.js", "hash.js", "utf8str", "t61str", "ia5str", "iso646str", "src/createAnimatedComponent.js"];
 
 export async function fetchScriptFile(branch: DiscordBranch, fileName: string) {
   const url = new URL(fileName, branch)
@@ -133,101 +133,56 @@ export async function fetchLazyLoadedScripts(chunkLoader: string) {
   let lazyScripts: ClientScript[] = []
   const ast = parseSync(chunkLoader);
 
+  function pushChunk(chunkId: number, chunkHash: string) {
+    if (!chunkHash.endsWith(".js")) {
+      chunkHash = `${chunkHash}.js`
+    }
+
+    lazyScripts.push({
+      path: chunkHash,
+      flags: [],
+    })
+  }
+
   walker.walk(JSON.parse(ast.program), {
     enter: (node: any, parent: any) => {
       if (parent === null) { return; }
-      let isChunk = false
-      let chunkID: number | undefined = undefined;
-      let chunkHash: string | undefined = undefined;
 
-      if (node.type === "ConditionalExpression") {
-        const test = node.test
-        const consequent = node.consequent
+      if (node.type == "BinaryExpression") {
+        const left = node?.left
+        const right = node?.right
 
-        if (test === undefined) { return; }
-        if (consequent === undefined) { return; }
-        if (test.type !== "BinaryExpression" || consequent.type !== "BinaryExpression") { return; }
-        const testLeft = test.left
-        const consequentRight = consequent.right
-        if (consequentRight.type !== "StringLiteral") { return; }
+        if (left == undefined || right == undefined) { return; }
 
-        const _chunkID: string = testLeft.value
-        const _chunkHash: string = consequentRight.value
+        if (left.type == "BinaryExpression" && right.type == "StringLiteral") {
+          // other files are useless to us, we only care about scripts (for now, at least)
+          if (right.value != ".js") { return; }
 
-        const isChunkHash = _chunkHash.endsWith(".js") === true
+          const nestedBinaryExpression = left?.right
+          if (nestedBinaryExpression?.type == "ComputedMemberExpression") {
+            const innerRight = nestedBinaryExpression?.object
 
-        if (isChunkHash === true) {
-          chunkID = Number.parseInt(_chunkID)
-          chunkHash = `${_chunkID}${_chunkHash}`
-          isChunk = true
-        } else {
-        }
-      }
+            if (innerRight?.type == "ParenthesizedExpression") {
+              const expression = innerRight?.expression
+              const properties = expression?.properties
 
-      if (node.type === "ObjectProperty") {
-        const key = node?.key
-        const value = node?.value
+              for (let property of properties) {
+                const key = property?.key
+                const value = property?.value
 
-        const _chunkId = key?.value
-        const _chunkHash = value?.value
+                if (key.type != "NumericLiteral") { continue; }
+                if (value?.type != "StringLiteral") { continue; }
 
-        // why would we parse numbers..
-        if (typeof _chunkHash !== "string") {
-          return;
-        }
+                const chunkId = key?.value
+                const chunkHash = value?.value
 
-        if (_chunkHash !== undefined) {
-          if (_chunkHash.endsWith(".js")) {
-            chunkID = Number.parseInt(_chunkId)
-            chunkHash = `${_chunkHash}`
-            isChunk = true
+                pushChunk(chunkId, chunkHash)
+              }
+            }
           }
         }
       }
-
-      if (parent.type === "ObjectExpression") {
-        const key = node.key
-        const value = node.value
-
-        if (key === undefined) { return; }
-        if (value === undefined) { return; }
-
-        const _chunkID = key.value
-        const isChunkIDNum = Number.isInteger(_chunkID) === true
-        const _chunkHash: string = value.value
-
-        if (typeof (_chunkHash) !== "string") {
-          return;
-        }
-
-        const isHash = IGNORED_FILENAMES.includes(_chunkHash) !== true
-          && _chunkHash.startsWith("F") !== true
-          && _chunkHash.endsWith(".js") !== true
-          && JS_URL_REGEXES.regex_url_hash.test(_chunkHash)
-
-        const isChunkFile = _chunkHash !== undefined
-          && isChunkIDNum === true
-          && isHash === true
-
-        if (isChunkFile === true) {
-          chunkID = Number.parseInt(_chunkID)
-          chunkHash = _chunkHash
-          isChunk = true
-        }
-      }
-
-
-      if (isChunk === true && chunkID !== undefined && chunkHash !== undefined) {
-        if (!chunkHash.endsWith(".js")) {
-          chunkHash = `${chunkHash}.js`
-        }
-
-        lazyScripts.push({
-          path: chunkHash,
-          flags: [],
-        })
-      }
-    },
+    }
   })
 
   return lazyScripts
@@ -280,8 +235,7 @@ export async function pullClientScripts(mode: "initial" | "lazy" | "full" = "ful
       clientScripts.lazy = await fetchLazyLoadedScripts(chunkLoader)
 
       if (clientScripts.lazy.length === 0) {
-        logger.error("Catastrophic Failure: Could not find any lazy scripts in the chunkloader!!")
-        throw new Error("Catastrophic failure!")
+        throw new Error("Catastrophic Failure: Could not find any lazy scripts in the chunkloader!!")
       }
 
       await fetchScripts(branch, clientScripts.lazy, true)

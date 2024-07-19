@@ -1,5 +1,5 @@
-import { ASTParser } from "../../Parsers/ASTParser";
-import { ASTString, ASTStringsPlugin } from "../../Parsers/Strings";
+import { ASTParser } from "../ASTParser";
+import { ASTString, ASTStringsPlugin } from "../Strings";
 import { ScriptFlags, fetchScriptFile } from "../../ClientScriptsPuller";
 import Logger from "../../Logger";
 import { BuildData } from "../../Types/BuildData";

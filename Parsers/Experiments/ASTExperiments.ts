@@ -2,7 +2,7 @@ import { ClientScript, ScriptFlags } from "../../ClientScriptsPuller"
 
 import Logger from "../../Logger"
 import { Experiment, ExperimentType } from "../../Types/Experiments";
-import { ASTPlugin } from "../../Parsers/ASTPlugin";
+import { ASTPlugin } from "../ASTPlugin";
 import assert from "node:assert";
 import murmurhash from "murmurhash";
 
