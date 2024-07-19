@@ -125,13 +125,15 @@ export async function compileBuildData(branch: DiscordBranch = DiscordBranch.Sta
       initial: initialScripts.map((script) => {
         return {
           path: script.path,
-          flags: script.flags
+          flags: script.flags,
+          content: null,
         }
       }),
       lazy: lazyScripts.map((script) => {
         return {
           path: script.path,
-          flags: script.flags
+          flags: script.flags,
+          content: null,
         }
       }),
     },
